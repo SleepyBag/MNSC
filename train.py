@@ -1,4 +1,3 @@
-import ipdb
 # -*- coding: utf-8 -*-
 # author: Xue Qianming
 
@@ -51,43 +50,31 @@ for param_collection in params.values():
             tf.flags.DEFINE_boolean(param_name, default, description)
 
 FLAGS = tf.flags.FLAGS
-# print("\nParameters:")
-# for attr, value in sorted(FLAGS.__flags.items()):
-#     print("{} = {}".format(attr, value.value))
-# print("")
 
 
-# Load data
-print("Loading data...")
-datasets = ['data/' + FLAGS.dataset + s for s in ['/train.ss', 'dev.ss', 'test.ss']]
-embeddingpath = 'data/' + FLAGS.dataset + '/embedding.txt'
-trainset, devset, testset = data.build_dataset(datasets, embeddingpath)
-trainset = trainset.repeat().shuffle().batch(FLAGS.batch_size)
-devset = devset.batch(FLAGS.batch_size)
-testset = testset.batch(FLAGS.batch_size)
-# trainset = Dataset('data/' + FLAGS.dataset + '/train.ss')
-# devset = Dataset('data/' + FLAGS.dataset + '/dev.ss')
-# testset = Dataset('data/' + FLAGS.dataset + '/test.ss')
-
-# alldata = np.concatenate([trainset.t_docs, devset.t_docs, testset.t_docs], axis=0)
-# embeddingfile, wordsdict, index_to_word = data_helpers.load_embedding(embeddingpath, alldata, FLAGS.embedding_dim)
-# del alldata
-print("Loading data finished...")
-
-# usrdict, prddict = trainset.get_usr_prd_dict()
-# trainbatches = trainset.batch_iter(usrdict, prddict, wordsdict, FLAGS.n_class, FLAGS.batch_size,
-#                                    FLAGS.num_epochs, FLAGS.max_sen_len, FLAGS.max_doc_len)
-# devset.genBatch(usrdict, prddict, wordsdict, FLAGS.batch_size,
-#                 FLAGS.max_sen_len, FLAGS.max_doc_len, FLAGS.n_class)
-# testset.genBatch(usrdict, prddict, wordsdict, FLAGS.batch_size,
-#                  FLAGS.max_sen_len, FLAGS.max_doc_len, FLAGS.n_class)
-
-
-def convert_index_to_words(indices):
-    return [index_to_word[i] for i in indices]
+def test(sess, testlen, metrics, ops=tuple()):
+    pgb = tqdm(range(testlen // FLAGS.batch_size), leave=False, ncols=90)
+    metrics_total = [0] * len(metrics)
+    for i in pgb:
+        cur_metrics = sess.run(metrics + ops)
+        for j in range(len(metrics)):
+            metrics_total[j] += cur_metrics[j]
+    return metrics_total
 
 
 with tf.Graph().as_default():
+    # Load data
+    print("Loading data...")
+    datasets = ['data/' + FLAGS.dataset + s for s in ['/train.ss', '/dev.ss', '/test.ss']]
+    embeddingpath = 'data/' + FLAGS.dataset + '/embedding.txt'
+    datasets, lengths, embedding, usr_cnt, prd_cnt = data.build_dataset(datasets, embeddingpath)
+    trainset, devset, testset = datasets
+    trainlen, devlen, testlen = lengths
+    trainset = trainset.repeat().shuffle(10000).batch(FLAGS.batch_size)
+    devset = devset.batch(FLAGS.batch_size).repeat()
+    testset = testset.batch(FLAGS.batch_size).repeat()
+    print("Loading data finished...")
+
     # create the session
     session_config = tf.ConfigProto(
         allow_soft_placement=FLAGS.allow_soft_placement,
@@ -99,21 +86,21 @@ with tf.Graph().as_default():
     with sess.as_default():
         # build the model
         model_params = {
-            'max_sen_len': FLAGS.max_sen_len,
-            'max_doc_len': FLAGS.max_doc_len,
-            'cls_cnt': FLAGS.n_class,
-            'emb_file': embeddingfile,
-            'emb_dim': FLAGS.embedding_dim,
-            'hidden_size': FLAGS.hidden_size,
-            'usr_cnt': len(usrdict),
-            'prd_cnt': len(prddict),
-            'l2_rate': FLAGS.l2_rate,
-            'hop_cnt': FLAGS.hop_cnt
+            'max_sen_len': FLAGS.max_sen_len, 'max_doc_len': FLAGS.max_doc_len,
+            'cls_cnt': FLAGS.n_class, 'embedding': embedding,
+            'emb_dim': FLAGS.embedding_dim, 'hidden_size': FLAGS.hidden_size,
+            'usr_cnt': usr_cnt, 'prd_cnt': prd_cnt,
+            'l2_rate': FLAGS.l2_rate, 'hop_cnt': FLAGS.hop_cnt
         }
         if FLAGS.model == 'dnsc':
             model = DNSC(**model_params)
 
-        loss, mse, correct_num, accuracy = model.build()
+        data_iter = tf.data.Iterator.from_structure(trainset.output_types, output_shapes=trainset.output_shapes)
+        traininit = data_iter.make_initializer(trainset)
+        devinit = data_iter.make_initializer(devset)
+        testinit = data_iter.make_initializer(testset)
+
+        loss, mse, correct_num, accuracy = model.build(data_iter)
 
         # Define Training procedure
         global_step = tf.Variable(0, name="global_step", trainable=False)
@@ -126,109 +113,34 @@ with tf.Graph().as_default():
         grads_and_vars = optimizer.compute_gradients(loss)
         train_op = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
 
-        # Save dict
-        timestamp = str(int(time.time()))
-        checkpoint_dir = os.path.abspath("checkpoints/" + FLAGS.dataset + "/" + timestamp)
-        checkpoint_prefix = os.path.join(checkpoint_dir, "model")
-        if not os.path.exists(checkpoint_dir):
-            os.makedirs(checkpoint_dir)
-        saver = tf.train.Saver(tf.global_variables(), max_to_keep=1)
-        with open(checkpoint_dir + "/wordsdict.txt", 'wb') as f:
-            pickle.dump(wordsdict, f)
-        with open(checkpoint_dir + "/usrdict.txt", 'wb') as f:
-            pickle.dump(usrdict, f)
-        with open(checkpoint_dir + "/prddict.txt", 'wb') as f:
-            pickle.dump(prddict, f)
-
         sess.run(tf.global_variables_initializer())
 
-        def train_step(batch, loss, accuracy):
-            ipdb.set_trace()
-            u, p, x, y, sen_len, doc_len = zip(*batch)
-            feed_dict = {
-                model.usrid: u,
-                model.prdid: p,
-                model.input_x: x,
-                model.input_y: y,
-                model.sen_len: sen_len,
-                model.doc_len: doc_len
-            }
-            _, step, loss, accuracy = sess.run(
-                [train_op, global_step, loss, accuracy],
-                feed_dict)
-            return step, loss, accuracy
-
-        def predict_step(u, p, x, y, sen_len, doc_len, fetches, name=None):
-            feed_dict = {
-                model.usrid: u,
-                model.prdid: p,
-                model.input_x: x,
-                model.input_y: y,
-                model.sen_len: sen_len,
-                model.doc_len: doc_len
-            }
-            fetches = sess.run(fetches, feed_dict)
-            return fetches
-
-        def predict(dataset, fetches, correct_num, mse, name=None):
-            acc = 0
-            rmse = 0.
-            fetches = (correct_num, mse) + fetches
-            pgb = tqdm(xrange(dataset.epoch), leave=False)
-            for i in pgb:
-                fetched = predict_step(dataset.usr[i], dataset.prd[i], dataset.docs[i],
-                                       dataset.label[i], dataset.sen_len[i], dataset.doc_len[i],
-                                       fetches, name)
-                cur_correct_num, cur_mse = fetched[:2]
-                acc += cur_correct_num
-                rmse += cur_mse
-            acc = acc * 1.0 / dataset.data_size
-            rmse = np.sqrt(rmse / dataset.data_size)
-            return acc, rmse
-
-        topacc = 0.
-        toprmse = 0.
-        better_dev_acc = 0.
-        predict_round = 0
-
-        total_loss, total_accuracy = 0., 0.
-        # Training loop. For each batch...
-        for tr_batch in trainbatches:
-            # pgb = tqdm(range(FLAGS.evaluate_every))
+        for epoch in range(FLAGS.num_epochs):
+            sess.run(traininit)
+            # pgb = tqdm(range(FLAGS.evaluate_every), leave=False)
             # for i in pgb:
-            cur_step, cur_loss, cur_accuracy = train_step(tr_batch, loss, accuracy)
-            total_loss += cur_loss
-            total_accuracy += cur_loss
-            # pgb.set_description(message)
-            current_step = tf.train.global_step(sess, global_step)
-            if current_step % FLAGS.evaluate_every == 0:
-                print("\nstep %d, loss %.4f, acc %.4f" %
-                      (cur_step, total_loss / FLAGS.evaluate_every, total_accuracy / FLAGS.evaluate_every))
-                total_loss, total_accuracy = 0., 0.
-                predict_round += 1
-                print("Evaluation round %d:" % (predict_round))
+            #     cur_loss, cur_mse, cur_correct_num, cur_accuracy, step, _ = \
+            #         test(sess, FLAGS.evaluate_every, (loss, mse, correct_num, accuracy))
+            #     # sess.run([loss, mse, correct_num, accuracy, global_step, train_op])
+            #     pgb.set_description('Step %d : Loss = %.3f, MSE = %.3f, Acc = %.3f' %
+            #                         (step, cur_loss, cur_mse, cur_correct_num))
+            trainlen = FLAGS.batch_size * FLAGS.evaluate_every
+            total_loss, total_mse, total_correct_num, total_accuracy, step = \
+                test(sess, trainlen, (loss, mse, correct_num, accuracy, global_step), (train_op, ))
+            print('Epoch %d trainset: Loss = %.3f, MSE = %.3f, Acc = %.3f' %
+                  (epoch, total_loss / (trainlen // FLAGS.batch_size),
+                   float(total_mse) / trainlen, float(total_correct_num) / trainlen))
 
-                fetches = (loss, accuracy)
-                dev_acc, dev_rmse = predict(devset, fetches, correct_num, mse, name="dev")
-                print("dev_acc: %.4f    dev_RMSE: %.4f" % (dev_acc, dev_rmse))
-                test_acc, test_rmse = predict(testset, fetches, correct_num, mse, name="test")
-                print("test_acc: %.4f    test_RMSE: %.4f" % (test_acc, test_rmse))
+            sess.run(devinit)
+            total_loss, total_mse, total_correct_num, total_accuracy = \
+                test(sess, devlen, (loss, mse, correct_num, accuracy), (train_op,))
+            print('Epoch %d devset: Loss = %.3f, MSE = %.3f, Acc = %.3f' %
+                  (epoch, total_loss / (devlen // FLAGS.batch_size),
+                   float(total_mse) / devlen, float(total_correct_num) / devlen))
 
-                # print topacc with best dev acc
-                if dev_acc >= better_dev_acc:
-                    better_dev_acc = dev_acc
-                    topacc = test_acc
-                    toprmse = test_rmse
-                    path = saver.save(sess, checkpoint_prefix, global_step=current_step)
-                    print("Saved model checkpoint to {}\n".format(path))
-                print("topacc: %.4f   RMSE: %.4f" % (topacc, toprmse))
-
-                # if FLAGS.debug:
-                #     doc = tr_batch[0][2].tolist()
-                #     for sentence, att in zip(doc, cur_attention):
-                #         att = ['%.2f' % i for i in att]
-                #         if sum(sentence) != 0:
-                #             sentence = [i for i in sentence if i != 0]
-                #             words = convert_index_to_words(sentence)
-                #             # plt.bar(range(len(words)), att, tick_label=words)
-                #             print(tabulate([words, att[:len(words)]]))
+            sess.run(testinit)
+            total_loss, total_mse, total_correct_num, total_accuracy = \
+                test(sess, testlen, (loss, mse, correct_num, accuracy), (train_op,))
+            print('Epoch %d testset: Loss = %.3f, MSE = %.3f, Acc = %.3f' %
+                  (epoch, total_loss / (testlen // FLAGS.batch_size),
+                   float(total_mse) / testlen, float(total_correct_num) / testlen))

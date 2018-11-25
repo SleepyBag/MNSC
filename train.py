@@ -1,20 +1,18 @@
 # -*- coding: utf-8 -*-
 # author: Xue Qianming
-
 import os
 import time
 import pickle
 import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
-# from tensorflow.python import debug as tf_debug
-
 import data
 from dnsc import DNSC
-# import matplotlib.pyplot as plt
+from colored import fg, stylize
+import dnsc
 
 params = {
-    'debug_params': [('debug', False, 'Debug or not')],
+    'debug_params': [('debug', False, 'Whether to debug or not')],
     'data_params': [('n_class', 5, "Numbers of class"),
                     ('dataset', 'yelp13', "The dataset")],
     'model_chooing': [('model', 'nsc,', 'Model to train')],
@@ -52,16 +50,6 @@ for param_collection in params.values():
 FLAGS = tf.flags.FLAGS
 
 
-def test(sess, testlen, metrics, ops=tuple()):
-    pgb = tqdm(range(testlen // FLAGS.batch_size), leave=False, ncols=90)
-    metrics_total = [0] * len(metrics)
-    for i in pgb:
-        cur_metrics = sess.run(metrics + ops)
-        for j in range(len(metrics)):
-            metrics_total[j] += cur_metrics[j]
-    return metrics_total
-
-
 with tf.Graph().as_default():
     # Load data
     print("Loading data...")
@@ -70,7 +58,7 @@ with tf.Graph().as_default():
     datasets, lengths, embedding, usr_cnt, prd_cnt = data.build_dataset(datasets, embeddingpath)
     trainset, devset, testset = datasets
     trainlen, devlen, testlen = lengths
-    trainset = trainset.repeat().shuffle(10000).batch(FLAGS.batch_size)
+    trainset = trainset.repeat().shuffle(100000).batch(FLAGS.batch_size)
     devset = devset.batch(FLAGS.batch_size).repeat()
     testset = testset.batch(FLAGS.batch_size).repeat()
     print("Loading data finished...")
@@ -94,13 +82,14 @@ with tf.Graph().as_default():
         }
         if FLAGS.model == 'dnsc':
             model = DNSC(**model_params)
+            cur_model = dnsc
 
         data_iter = tf.data.Iterator.from_structure(trainset.output_types, output_shapes=trainset.output_shapes)
         traininit = data_iter.make_initializer(trainset)
         devinit = data_iter.make_initializer(devset)
         testinit = data_iter.make_initializer(testset)
 
-        loss, mse, correct_num, accuracy = model.build(data_iter)
+        metrics = model.build(data_iter)
 
         # Define Training procedure
         global_step = tf.Variable(0, name="global_step", trainable=False)
@@ -110,37 +99,62 @@ with tf.Graph().as_default():
             optimizer = tf.train.AdamOptimizer(FLAGS.lr)
         elif FLAGS.training_method == 'adadelta':
             optimizer = tf.train.AdadeltaOptimizer(FLAGS.lr, epsilon=1e-6)
-        grads_and_vars = optimizer.compute_gradients(loss)
+        grads_and_vars = optimizer.compute_gradients(metrics[0])
         train_op = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
+
+        # merge tensorboard summary
+        if FLAGS.debug:
+            summary = tf.summary.merge_all()
+            train_writer = tf.summary.FileWriter('summary/train', sess.graph)
+            dev_writer = tf.summary.FileWriter('summary/dev', sess.graph)
+            test_writer = tf.summary.FileWriter('summary/test', sess.graph)
 
         sess.run(tf.global_variables_initializer())
 
+        # run a dataset
+        def run_set(sess, testlen, metrics, ops=tuple()):
+            pgb = tqdm(range(testlen // FLAGS.batch_size), leave=False, ncols=90)
+            metrics_total = [0] * len(metrics)
+            op_results = [[] for i in ops]
+            for i in pgb:
+                cur_metrics = sess.run(metrics + ops)
+                for j in range(len(metrics)):
+                    metrics_total[j] += cur_metrics[j]
+                for j in range(len(ops)):
+                    op_results[j].append(cur_metrics[len(metrics) + j])
+            return [metrics_total] + op_results
+
+        best_dev_acc = 0.
+        best_test_acc = 0.
         for epoch in range(FLAGS.num_epochs):
+            # train on transet
             sess.run(traininit)
-            # pgb = tqdm(range(FLAGS.evaluate_every), leave=False)
-            # for i in pgb:
-            #     cur_loss, cur_mse, cur_correct_num, cur_accuracy, step, _ = \
-            #         test(sess, FLAGS.evaluate_every, (loss, mse, correct_num, accuracy))
-            #     # sess.run([loss, mse, correct_num, accuracy, global_step, train_op])
-            #     pgb.set_description('Step %d : Loss = %.3f, MSE = %.3f, Acc = %.3f' %
-            #                         (step, cur_loss, cur_mse, cur_correct_num))
             trainlen = FLAGS.batch_size * FLAGS.evaluate_every
-            total_loss, total_mse, total_correct_num, total_accuracy, step = \
-                test(sess, trainlen, (loss, mse, correct_num, accuracy, global_step), (train_op, ))
-            print('Epoch %d trainset: Loss = %.3f, MSE = %.3f, Acc = %.3f' %
-                  (epoch, total_loss / (trainlen // FLAGS.batch_size),
-                   float(total_mse) / trainlen, float(total_correct_num) / trainlen))
+            # when debugging, summary info is needed for tensorboard
+            if FLAGS.debug:
+                train_metrics, step, train_summary, _ = \
+                    run_set(sess, trainlen, metrics, (global_step, summary, train_op))
+            else:
+                train_metrics, step, _ = \
+                    run_set(sess, trainlen, metrics, (global_step, train_op, ))
+            info = model.output_metrics(train_metrics, trainlen)
+            print(stylize('Trainset:' + info, fg('yellow')))
 
+            if FLAGS.debug:
+                for i, s in enumerate(train_summary):
+                    train_writer.add_summary(s, step - FLAGS.evaluate_every + i)
+
+            # test on devset
             sess.run(devinit)
-            total_loss, total_mse, total_correct_num, total_accuracy = \
-                test(sess, devlen, (loss, mse, correct_num, accuracy), (train_op,))
-            print('Epoch %d devset: Loss = %.3f, MSE = %.3f, Acc = %.3f' %
-                  (epoch, total_loss / (devlen // FLAGS.batch_size),
-                   float(total_mse) / devlen, float(total_correct_num) / devlen))
+            dev_metrics, = run_set(sess, devlen, metrics)
+            info = model.output_metrics(dev_metrics, devlen)
+            print(stylize('Devset:  ' + info, fg('green')))
 
+            # test on testset
             sess.run(testinit)
-            total_loss, total_mse, total_correct_num, total_accuracy = \
-                test(sess, testlen, (loss, mse, correct_num, accuracy), (train_op,))
-            print('Epoch %d testset: Loss = %.3f, MSE = %.3f, Acc = %.3f' %
-                  (epoch, total_loss / (testlen // FLAGS.batch_size),
-                   float(total_mse) / testlen, float(total_correct_num) / testlen))
+            test_metrics, = run_set(sess, testlen, metrics)
+            info = model.output_metrics(test_metrics, testlen)
+            print(stylize('Testset: ' + info, fg('red')))
+
+            info = model.record_metrics(dev_metrics, test_metrics, devlen, testlen)
+            print(stylize('Epoch %d finished, ' % epoch + info, fg('white')))

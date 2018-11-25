@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow import get_variable as var
 from tensorflow import constant as const
+from colored import stylize, fg
 
 
 class DNSC(object):
@@ -20,6 +21,8 @@ class DNSC(object):
         self.hidden_size = hidden_size
         self.hop_cnt = hop_cnt
         self.l2_rate = l2_rate
+        self.best_dev_acc = .0
+        self.best_test_acc = .0
 
         # initializers for parameters
         weights_initializer = tf.contrib.layers.xavier_initializer()
@@ -59,6 +62,10 @@ class DNSC(object):
                 'usr_emb': var('usr_emb', shape=[usr_cnt, hidden_size], initializer=emb_initializer),
                 'prd_emb': var('prd_emb', shape=[prd_cnt, hidden_size], initializer=emb_initializer),
             }
+
+        # for tensorboard
+        tf.summary.histogram('usr_emb', self.embeddings['usr_emb'])
+        tf.summary.histogram('prd_emb', self.embeddings['prd_emb'])
 
     def lstm(self, inputs, sequence_length, hidden_size, scope):
         outputs, state = tf.nn.dynamic_rnn(
@@ -131,7 +138,6 @@ class DNSC(object):
         with tf.name_scope('result'):
             outputs = tf.concat(values=identity, axis=1)
             d_hat = tf.tanh(tf.matmul(outputs, self.weights['softmax']) + self.biases['softmax'])
-            # p_hat = tf.nn.softmax(d_hat)
         return d_hat
 
     def build(self, data_iter):
@@ -158,12 +164,30 @@ class DNSC(object):
             for param in params:
                 if param not in self.embeddings.values():
                     regularizer += tf.nn.l2_loss(param)
-            loss = tf.reduce_mean(loss) + self.l2_rate * regularizer
+            loss = tf.reduce_sum(loss) + self.l2_rate * regularizer
 
         with tf.name_scope("metrics"):
             correct_prediction = tf.equal(self.prediction, self.input_y)
             self.mse = tf.reduce_sum(tf.square(self.prediction - self.input_y), name="mse")
             self.correct_num = tf.reduce_sum(tf.cast(correct_prediction, dtype=tf.int32), name="correct_num")
-            self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"), name="accuracy")
+            self.accuracy = tf.reduce_sum(tf.cast(correct_prediction, "float"), name="accuracy")
 
         return loss, self.mse, self.correct_num, self.accuracy
+
+    def output_metrics(self, metrics, data_length):
+        loss, mse, correct_num, accuracy = metrics
+        info = 'Loss = %.3f, MSE = %.3f, Acc = %.3f' % \
+            (loss / data_length, float(mse) / data_length, float(correct_num) / data_length)
+        return info
+
+    def record_metrics(self, dev_metrics, test_metrics, devlen, testlen):
+        dev_loss, dev_mse, dev_correct_num, dev_accuracy = dev_metrics
+        test_loss, test_mse, test_correct_num, test_accuracy = test_metrics
+        dev_accuracy = float(dev_correct_num) / devlen
+        test_accuracy = float(test_correct_num) / testlen
+        if dev_accuracy > self.best_dev_acc:
+            self.best_dev_acc = dev_accuracy
+            self.best_test_acc = test_accuracy
+        info = 'best dev acc: %.3f, best test acc: %.3f' % \
+            (self.best_dev_acc, self.best_test_acc)
+        return info

@@ -107,8 +107,8 @@ with tf.Graph().as_default():
         if FLAGS.debug:
             summary = tf.summary.merge_all()
             train_writer = tf.summary.FileWriter('summary/train', sess.graph)
-            dev_writer = tf.summary.FileWriter('summary/dev', sess.graph)
-            test_writer = tf.summary.FileWriter('summary/test', sess.graph)
+            # dev_writer = tf.summary.FileWriter('summary/dev', sess.graph)
+            # test_writer = tf.summary.FileWriter('summary/test', sess.graph)
 
         sess.run(tf.global_variables_initializer())
 

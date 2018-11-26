@@ -73,6 +73,8 @@ class DNSC(object):
         if debug:
             tf.summary.histogram('usr_emb', self.embeddings['usr_emb'])
             tf.summary.histogram('prd_emb', self.embeddings['prd_emb'])
+            tf.summary.histogram('sen_convert_wu', self.weights['sen_convert_wu'])
+            tf.summary.histogram('sen_convert_wp', self.weights['sen_convert_wp'])
 
     def attention(self, v, wh, h, wi, i, b, doc_len, max_len):
         """
@@ -138,7 +140,10 @@ class DNSC(object):
                     new_identity[i] = tf.reshape(new_identity[i], [-1, self.hidden_size],
                                                  name='new_identity' + str(i))
                     identity[i] = tf.matmul(identity[i], convert_w[i])
-                    identity[i] += new_identity[i]
+                    if hop != self.hop_cnt - 1:
+                        identity[i] += new_identity[i]
+                    else:
+                        identity[i] = new_identity[i]
                 # outputs = tf.reshape(outputs, [-1, self.max_doc_len, self.hidden_size])
 
         # with tf.name_scope('doc'):

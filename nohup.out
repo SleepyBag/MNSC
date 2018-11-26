@@ -117,3 +117,38 @@ W1125 11:43:09.764637 Reloader tf_logging.py:120] Found more than one graph even
 W1125 11:43:09.764637 140278318987008 tf_logging.py:120] Found more than one graph event per run, or there was a metagraph containing a graph_def, as well as one or more graph events.  Overwriting the graph with the newest event.
 E1125 11:43:16.486039 Reloader directory_watcher.py:241] File /home/qmxue/MNSC/summary/train/events.out.tfevents.1543117367.AIDA1080Ti updated even though the current file is /home/qmxue/MNSC/summary/train/events.out.tfevents.1543117368.AIDA1080Ti
 E1125 11:43:16.486039 140278318987008 directory_watcher.py:241] File /home/qmxue/MNSC/summary/train/events.out.tfevents.1543117367.AIDA1080Ti updated even though the current file is /home/qmxue/MNSC/summary/train/events.out.tfevents.1543117368.AIDA1080Ti
+TensorBoard 1.11.0 at http://AIDA1080Ti:8288 (Press CTRL+C to quit)
+W1126 09:52:27.417547 Thread-1 application.py:300] path /[[getImageSrc(feat.name)]] not found, sending 404
+W1126 09:52:27.417546 139822199146240 application.py:300] path /[[getImageSrc(feat.name)]] not found, sending 404
+W1126 09:52:27.422825 Thread-2 application.py:300] path /[[getCompareImageSrc(feat.name)]] not found, sending 404
+W1126 09:52:27.422825 139822106666752 application.py:300] path /[[getCompareImageSrc(feat.name)]] not found, sending 404
+W1126 09:52:27.423858 Thread-3 application.py:300] path /[[getSeqImageSrc(seqfeat.name, seqNumber)]] not found, sending 404
+W1126 09:52:27.423857 139822098274048 application.py:300] path /[[getSeqImageSrc(seqfeat.name, seqNumber)]] not found, sending 404
+W1126 09:52:27.425883 Thread-4 application.py:300] path /[[getCompareSeqImageSrc(seqfeat.name, seqNumber)]] not found, sending 404
+W1126 09:52:27.425883 139822089881344 application.py:300] path /[[getCompareSeqImageSrc(seqfeat.name, seqNumber)]] not found, sending 404
+W1126 09:53:03.853069 Reloader tf_logging.py:120] Found more than one graph event per run, or there was a metagraph containing a graph_def, as well as one or more graph events.  Overwriting the graph with the newest event.
+W1126 09:53:03.853069 139822207801088 tf_logging.py:120] Found more than one graph event per run, or there was a metagraph containing a graph_def, as well as one or more graph events.  Overwriting the graph with the newest event.
+W1126 09:53:22.551487 Reloader tf_logging.py:120] Found more than one metagraph event per run. Overwriting the metagraph with the newest event.
+W1126 09:53:22.551486 139822207801088 tf_logging.py:120] Found more than one metagraph event per run. Overwriting the metagraph with the newest event.
+W1126 09:53:34.645871 Reloader tf_logging.py:120] Found more than one graph event per run, or there was a metagraph containing a graph_def, as well as one or more graph events.  Overwriting the graph with the newest event.
+W1126 09:53:34.645870 139822207801088 tf_logging.py:120] Found more than one graph event per run, or there was a metagraph containing a graph_def, as well as one or more graph events.  Overwriting the graph with the newest event.
+W1126 10:00:40.514579 Reloader tf_logging.py:120] Found more than one metagraph event per run. Overwriting the metagraph with the newest event.
+W1126 10:00:40.514579 139822207801088 tf_logging.py:120] Found more than one metagraph event per run. Overwriting the metagraph with the newest event.
+W1126 10:36:11.456719 Reloader tf_logging.py:120] Found more than one graph event per run, or there was a metagraph containing a graph_def, as well as one or more graph events.  Overwriting the graph with the newest event.
+W1126 10:36:11.456719 139822207801088 tf_logging.py:120] Found more than one graph event per run, or there was a metagraph containing a graph_def, as well as one or more graph events.  Overwriting the graph with the newest event.
+W1126 10:44:01.373168 Reloader tf_logging.py:120] Found more than one metagraph event per run. Overwriting the metagraph with the newest event.
+W1126 10:44:01.373168 139822207801088 tf_logging.py:120] Found more than one metagraph event per run. Overwriting the metagraph with the newest event.
+W1126 14:32:16.539432 Reloader plugin_event_multiplexer.py:242] Deleting accumulator '.'
+W1126 14:32:16.539432 139822207801088 plugin_event_multiplexer.py:242] Deleting accumulator '.'
+W1126 15:21:47.461537 Thread-7 application.py:300] path /[[getImageSrc(feat.name)]] not found, sending 404
+W1126 15:21:47.461537 139822073095936 application.py:300] path /[[getImageSrc(feat.name)]] not found, sending 404
+W1126 15:21:47.464115 Thread-8 application.py:300] path /[[getCompareImageSrc(feat.name)]] not found, sending 404
+W1126 15:21:47.464115 139822089881344 application.py:300] path /[[getCompareImageSrc(feat.name)]] not found, sending 404
+W1126 15:21:47.466462 Thread-9 application.py:300] path /[[getSeqImageSrc(seqfeat.name, seqNumber)]] not found, sending 404
+W1126 15:21:47.466462 139822098274048 application.py:300] path /[[getSeqImageSrc(seqfeat.name, seqNumber)]] not found, sending 404
+W1126 15:21:47.467845 Thread-10 application.py:300] path /[[getCompareSeqImageSrc(seqfeat.name, seqNumber)]] not found, sending 404
+W1126 15:21:47.467844 139822106666752 application.py:300] path /[[getCompareSeqImageSrc(seqfeat.name, seqNumber)]] not found, sending 404
+W1126 15:29:38.716786 Reloader tf_logging.py:120] Found more than one graph event per run, or there was a metagraph containing a graph_def, as well as one or more graph events.  Overwriting the graph with the newest event.
+W1126 15:29:38.716786 139822207801088 tf_logging.py:120] Found more than one graph event per run, or there was a metagraph containing a graph_def, as well as one or more graph events.  Overwriting the graph with the newest event.
+W1126 15:36:03.634409 Reloader tf_logging.py:120] Found more than one metagraph event per run. Overwriting the metagraph with the newest event.
+W1126 15:36:03.634409 139822207801088 tf_logging.py:120] Found more than one metagraph event per run. Overwriting the metagraph with the newest event.

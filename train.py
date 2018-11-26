@@ -182,5 +182,5 @@ with tf.Graph().as_default():
             print('Interrupted')
             best_dev_acc = model.best_dev_acc
             src = 'code_history/' + str(cur_time)
-            dest = src + 'acc' + str(best_dev_acc)
+            dest = 'acc' + str(best_dev_acc) + '_' + src
             os.system('mv ' + src + ' ' + dest)

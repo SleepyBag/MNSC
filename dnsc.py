@@ -126,7 +126,7 @@ class DNSC(object):
         widentity = [self.weights['sen_wu'], self.weights['sen_wp']]
         identity = [self.usr, self.prd]
         convert_w = [self.weights['sen_convert_wu'], self.weights['sen_convert_wp']]
-        # convert_b = [self.biases['sen_convert_bu'], self.biases['sen_convert_bp']]
+        convert_b = [self.biases['sen_convert_bu'], self.biases['sen_convert_bp']]
         new_identity = [0] * len(identity)
 
         for hop in range(self.hop_cnt):
@@ -145,7 +145,7 @@ class DNSC(object):
                     new_identity[i] = tf.reshape(new_identity[i], [-1, self.hidden_size],
                                                  name='new_identity' + str(i))
                     identity[i] = tf.matmul(identity[i], convert_w[i])
-                    # identity[i] = identity[i] + convert_b[i]
+                    identity[i] = identity[i] + convert_b[i]
                     # identity[i] = tf.nn.relu(identity[i])
                     if hop != self.hop_cnt - 1:
                         identity[i] += new_identity[i]

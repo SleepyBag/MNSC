@@ -21,9 +21,9 @@ localtime = time.localtime(cur_time)
 
 params = {
     'debug_params': [('debug', False, 'Whether to debug or not')],
-    'data_params': [('n_class', 5, "Numbers of class"),
+    'data_params': [('n_class', 10, "Numbers of class"),
                     ('dataset', 'test', "The dataset")],
-    'model_chooing': [('model', 'nsc,', 'Model to train')],
+    'model_chooing': [('model', 'dnsc', 'Model to train')],
     'model_hyperparam': [("embedding_dim", 200, "Dimensionality of character embedding"),
                          ("hidden_size", 200, "hidden_size"),
                          ('max_sen_len', 50, 'max number of tokens per sentence'),
@@ -55,7 +55,16 @@ for param_collection in params.values():
         elif param_type is bool:
             tf.flags.DEFINE_boolean(param_name, default, description)
 
+# print params
 FLAGS = tf.flags.FLAGS
+# FLAGS._parse_flags()
+output_file = open('code_history/' + str(cur_time) + '/output.txt', 'a')
+print("\nParameters:")
+for attr, value in sorted(FLAGS.__flags.items()):
+    print("{}={}".format(attr.upper(), value.value))
+    print >> output_file, "{}={}".format(attr.upper(), value.value)
+print("")
+output_file.close()
 
 
 with tf.Graph().as_default():

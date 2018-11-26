@@ -11,6 +11,14 @@ from dnsc import DNSC
 from colored import fg, stylize
 import dnsc
 
+
+# save current codes
+cur_time = time.time()
+os.system('mkdir code_history/' + cur_time)
+os.system('cp *.py code_history/' + cur_time + '/')
+
+output_file = open('code_history/' + cur_time + '/output.txt')
+
 params = {
     'debug_params': [('debug', False, 'Whether to debug or not')],
     'data_params': [('n_class', 5, "Numbers of class"),
@@ -114,7 +122,7 @@ with tf.Graph().as_default():
 
         # run a dataset
         def run_set(sess, testlen, metrics, ops=tuple()):
-            pgb = tqdm(range(testlen // FLAGS.batch_size), leave=False, ncols=90)
+            pgb = tqdm(range((testlen + 1) // FLAGS.batch_size), leave=False, ncols=90)
             metrics_total = [0] * len(metrics)
             op_results = [[] for i in ops]
             for i in pgb:

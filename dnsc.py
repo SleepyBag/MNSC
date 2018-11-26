@@ -56,6 +56,10 @@ class DNSC(object):
             self.biases = {
                 'softmax': var('softmax_b', [cls_cnt], biases_initializer),
 
+
+                'sen_convert_bu': var('sen_convert_bu', [hidden_size], biases_initializer),
+                'sen_convert_bp': var('sen_convert_bp', [hidden_size], biases_initializer),
+
                 'sen_attention_b': var('sen_attention_b', [hidden_size], biases_initializer),
                 'doc_attention_b': var('doc_attention_b', [hidden_size], biases_initializer)
             }
@@ -122,6 +126,7 @@ class DNSC(object):
         widentity = [self.weights['sen_wu'], self.weights['sen_wp']]
         identity = [self.usr, self.prd]
         convert_w = [self.weights['sen_convert_wu'], self.weights['sen_convert_wp']]
+        # convert_b = [self.biases['sen_convert_bu'], self.biases['sen_convert_bp']]
         new_identity = [0] * len(identity)
 
         for hop in range(self.hop_cnt):
@@ -140,6 +145,8 @@ class DNSC(object):
                     new_identity[i] = tf.reshape(new_identity[i], [-1, self.hidden_size],
                                                  name='new_identity' + str(i))
                     identity[i] = tf.matmul(identity[i], convert_w[i])
+                    # identity[i] = identity[i] + convert_b[i]
+                    # identity[i] = tf.nn.relu(identity[i])
                     if hop != self.hop_cnt - 1:
                         identity[i] += new_identity[i]
                     else:
@@ -165,14 +172,13 @@ class DNSC(object):
     def build(self, data_iter):
         # get the inputs
         input_map = data_iter.get_next()
-        self.usrid, self.prdid, self.input_x, \
-            self.input_y, self.sen_len = \
+        usrid, prdid, input_x, input_y, self.sen_len = \
             (input_map['usr'], input_map['prd'], input_map['content'],
              input_map['rating'], input_map['len'])
 
-        self.x = lookup(self.embeddings['wrd_emb'], self.input_x, name='cur_wrd_embedding')
-        self.usr = lookup(self.embeddings['usr_emb'], self.usrid, name='cur_usr_embedding')
-        self.prd = lookup(self.embeddings['prd_emb'], self.prdid, name='cur_prd_embedding')
+        self.x = lookup(self.embeddings['wrd_emb'], input_x, name='cur_wrd_embedding')
+        self.usr = lookup(self.embeddings['usr_emb'], usrid, name='cur_usr_embedding')
+        self.prd = lookup(self.embeddings['prd_emb'], prdid, name='cur_prd_embedding')
 
         # build the process of model
         self.d_hat = self.dnsc()
@@ -180,7 +186,7 @@ class DNSC(object):
 
         with tf.name_scope("loss"):
             loss = tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.d_hat,
-                                                              labels=tf.one_hot(self.input_y, self.cls_cnt))
+                                                              labels=tf.one_hot(input_y, self.cls_cnt))
             regularizer = tf.zeros(1)
             params = tf.trainable_variables()
             for param in params:
@@ -189,8 +195,8 @@ class DNSC(object):
             loss = tf.reduce_sum(loss) + self.l2_rate * regularizer
 
         with tf.name_scope("metrics"):
-            correct_prediction = tf.equal(self.prediction, self.input_y)
-            self.mse = tf.reduce_sum(tf.square(self.prediction - self.input_y), name="mse")
+            correct_prediction = tf.equal(self.prediction, input_y)
+            self.mse = tf.reduce_sum(tf.square(self.prediction - input_y), name="mse")
             self.correct_num = tf.reduce_sum(tf.cast(correct_prediction, dtype=tf.int32), name="correct_num")
             self.accuracy = tf.reduce_sum(tf.cast(correct_prediction, "float"), name="accuracy")
 

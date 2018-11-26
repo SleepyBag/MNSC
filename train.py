@@ -14,14 +14,14 @@ import dnsc
 params = {
     'debug_params': [('debug', False, 'Whether to debug or not')],
     'data_params': [('n_class', 5, "Numbers of class"),
-                    ('dataset', 'yelp13', "The dataset")],
+                    ('dataset', 'test', "The dataset")],
     'model_chooing': [('model', 'nsc,', 'Model to train')],
     'model_hyperparam': [("embedding_dim", 200, "Dimensionality of character embedding"),
                          ("hidden_size", 200, "hidden_size"),
                          ('max_sen_len', 50, 'max number of tokens per sentence'),
                          ('max_doc_len', 40, 'max number of tokens per sentence'),
                          ("lr", .001, "Learning rate"),
-                         ("l2_rate", 1e-5, "rate of l2 regularization"),
+                         ("l2_rate", .001, "rate of l2 regularization"),
                          ("lambda1", .4, "rate of l2 regularization"),
                          ("lambda2", .3, "rate of l2 regularization"),
                          ("lambda3", .3, "rate of l2 regularization"),
@@ -78,7 +78,8 @@ with tf.Graph().as_default():
             'cls_cnt': FLAGS.n_class, 'embedding': embedding,
             'emb_dim': FLAGS.embedding_dim, 'hidden_size': FLAGS.hidden_size,
             'usr_cnt': usr_cnt, 'prd_cnt': prd_cnt,
-            'l2_rate': FLAGS.l2_rate, 'hop_cnt': FLAGS.hop_cnt
+            'l2_rate': FLAGS.l2_rate, 'hop_cnt': FLAGS.hop_cnt,
+            'debug': FLAGS.debug
         }
         if FLAGS.model == 'dnsc':
             model = DNSC(**model_params)
@@ -141,8 +142,8 @@ with tf.Graph().as_default():
             print(stylize('Trainset:' + info, fg('yellow')))
 
             if FLAGS.debug:
-                for i, s in enumerate(train_summary):
-                    train_writer.add_summary(s, step - FLAGS.evaluate_every + i)
+                for i, s in zip(step, train_summary):
+                    train_writer.add_summary(s, i)
 
             # test on devset
             sess.run(devinit)

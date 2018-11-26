@@ -1,13 +1,13 @@
 import tensorflow as tf
-from tensorflow import get_variable as var
 from tensorflow import constant as const
 from colored import stylize, fg
+lookup = tf.nn.embedding_lookup
 
 
 class DNSC(object):
 
     def __init__(self, max_sen_len, max_doc_len, cls_cnt, embedding,
-                 emb_dim, hidden_size, usr_cnt, prd_cnt, hop_cnt, l2_rate):
+                 emb_dim, hidden_size, usr_cnt, prd_cnt, hop_cnt, l2_rate, debug):
         self.max_sen_len = max_sen_len
         self.max_doc_len = max_doc_len
         self.cls_cnt = cls_cnt
@@ -29,29 +29,35 @@ class DNSC(object):
         biases_initializer = tf.contrib.layers.xavier_initializer()
         emb_initializer = tf.initializers.zeros()
 
+        def var(name, shape, initializer):
+            return tf.get_variable(name, shape=shape, initializer=initializer)
+
         # weights in the model
         with tf.name_scope('weights'):
             self.weights = {
-                'softmax': var('softmax_w', shape=[hidden_size * 2, cls_cnt], initializer=weights_initializer),
+                'softmax': var('softmax_w', [hidden_size * 2, cls_cnt], weights_initializer),
 
-                'sen_wh': var('sen_wh', shape=[hidden_size, hidden_size], initializer=weights_initializer),
-                'sen_wu': var('sen_wu', shape=[hidden_size, hidden_size], initializer=weights_initializer),
-                'sen_wp': var('sen_wp', shape=[hidden_size, hidden_size], initializer=weights_initializer),
-                'sen_v': var('sen_v', shape=[hidden_size, 1], initializer=weights_initializer),
+                'sen_wh': var('sen_wh', [hidden_size, hidden_size], weights_initializer),
+                'sen_wu': var('sen_wu', [hidden_size, hidden_size], weights_initializer),
+                'sen_wp': var('sen_wp', [hidden_size, hidden_size], weights_initializer),
+                'sen_v': var('sen_v', [hidden_size, 1], weights_initializer),
 
-                'doc_wh': var('doc_wh', shape=[hidden_size, hidden_size], initializer=weights_initializer),
-                'doc_wu': var('doc_wu', shape=[hidden_size, hidden_size], initializer=weights_initializer),
-                'doc_wp': var('doc_wp', shape=[hidden_size, hidden_size], initializer=weights_initializer),
-                'doc_v': var('doc_v', shape=[hidden_size, 1], initializer=weights_initializer)
+                'doc_wh': var('doc_wh', [hidden_size, hidden_size], weights_initializer),
+                'doc_wu': var('doc_wu', [hidden_size, hidden_size], weights_initializer),
+                'doc_wp': var('doc_wp', [hidden_size, hidden_size], weights_initializer),
+                'doc_v': var('doc_v', [hidden_size, 1], weights_initializer),
+
+                'sen_convert_wu': var('sen_convert_wu', [hidden_size, hidden_size], weights_initializer),
+                'sen_convert_wp': var('sen_convert_wp', [hidden_size, hidden_size], weights_initializer)
             }
 
         # biases in the model
         with tf.name_scope('biases'):
             self.biases = {
-                'softmax': var('softmax_b', shape=[cls_cnt], initializer=biases_initializer),
+                'softmax': var('softmax_b', [cls_cnt], biases_initializer),
 
-                'sen_attention_b': var('sen_attention_b', shape=[hidden_size], initializer=biases_initializer),
-                'doc_attention_b': var('doc_attention_b', shape=[hidden_size], initializer=biases_initializer)
+                'sen_attention_b': var('sen_attention_b', [hidden_size], biases_initializer),
+                'doc_attention_b': var('doc_attention_b', [hidden_size], biases_initializer)
             }
 
         # embeddings in the model
@@ -59,23 +65,14 @@ class DNSC(object):
             self.embeddings = {
                 # 'wrd_emb': const(embedding, name='wrd_emb', dtype=tf.float32),
                 'wrd_emb': tf.Variable(embedding, name='wrd_emb', dtype=tf.float32),
-                'usr_emb': var('usr_emb', shape=[usr_cnt, hidden_size], initializer=emb_initializer),
-                'prd_emb': var('prd_emb', shape=[prd_cnt, hidden_size], initializer=emb_initializer),
+                'usr_emb': var('usr_emb', [usr_cnt, hidden_size], emb_initializer),
+                'prd_emb': var('prd_emb', [prd_cnt, hidden_size], emb_initializer),
             }
 
         # for tensorboard
-        tf.summary.histogram('usr_emb', self.embeddings['usr_emb'])
-        tf.summary.histogram('prd_emb', self.embeddings['prd_emb'])
-
-    def lstm(self, inputs, sequence_length, hidden_size, scope):
-        outputs, state = tf.nn.dynamic_rnn(
-            cell=tf.nn.rnn_cell.LSTMCell(hidden_size, forget_bias=0., initializer=tf.contrib.layers.xavier_initializer()),
-            inputs=inputs,
-            sequence_length=sequence_length,
-            dtype=tf.float32,
-            scope=scope
-        )
-        return outputs, state
+        if debug:
+            tf.summary.histogram('usr_emb', self.embeddings['usr_emb'])
+            tf.summary.histogram('prd_emb', self.embeddings['prd_emb'])
 
     def attention(self, v, wh, h, wi, i, b, doc_len, max_len):
         """
@@ -92,7 +89,7 @@ class DNSC(object):
                 h = tf.matmul(h, wh)
                 e = tf.reshape(h + b, [-1, max_doc_len, hidden_size])
                 e = e + tf.matmul(ti, twi)[:, None, :]
-                e = tf.tanh(e)
+                e = tf.tanh(e, name='attention_with_null_word')
                 e = tf.reshape(e, [-1, hidden_size])
                 e = tf.reshape(tf.matmul(e, v), [-1, max_doc_len])
                 e = tf.nn.softmax(e)
@@ -100,16 +97,30 @@ class DNSC(object):
                 e = (e * mask)[:, None, :]
                 _sum = tf.reduce_sum(e, reduction_indices=2, keepdims=True) + 1e-9
                 e = e / _sum
-                e = tf.reshape(e, [-1, max_doc_len])
+                e = tf.reshape(e, [-1, max_doc_len], name='attention_without_null_word')
                 ans.append(e[:, None, :])
         return ans
 
     def dnsc(self):
         # inputs = tf.reshape(self.x, [-1, self.max_sen_len, self.emb_dim])
         # sen_len = tf.reshape(self.sen_len, [-1])
-        lstm_outputs, _state = self.lstm(self.x, self.sen_len, self.hidden_size, 'lstm')
+
+        def lstm(inputs, sequence_length, hidden_size, scope):
+            outputs, state = tf.nn.dynamic_rnn(
+                cell=tf.nn.rnn_cell.LSTMCell(hidden_size, forget_bias=0.,
+                                             initializer=tf.contrib.layers.xavier_initializer()),
+                inputs=inputs,
+                sequence_length=sequence_length,
+                dtype=tf.float32,
+                scope=scope
+            )
+            return outputs, state
+
+        lstm_outputs, _state = lstm(self.x, self.sen_len, self.hidden_size, 'lstm')
         widentity = [self.weights['sen_wu'], self.weights['sen_wp']]
         identity = [self.usr, self.prd]
+        convert_w = [self.weights['sen_convert_wu'], self.weights['sen_convert_wp']]
+        new_identity = [0] * len(identity)
 
         for hop in range(self.hop_cnt):
             with tf.name_scope('hop' + str(hop)):
@@ -121,8 +132,13 @@ class DNSC(object):
                                         self.sen_len, self.max_sen_len)
                 # sentence = tf.reshape(sentence, [-1, self.max_sen_len, self.hidden_size])
                 for i, alpha in enumerate(alphas):
-                    identity[i] = tf.matmul(alpha, sentence)
-                    identity[i] = tf.reshape(identity[i], [-1, self.hidden_size])
+                    new_identity[i] = tf.matmul(alpha, sentence)
+                    # !!! 1. whether to add old embedding
+                    # !!! 2. whether to convert old embedding linearly
+                    new_identity[i] = tf.reshape(new_identity[i], [-1, self.hidden_size],
+                                                 name='new_identity' + str(i))
+                    identity[i] = tf.matmul(identity[i], convert_w[i])
+                    identity[i] += new_identity[i]
                 # outputs = tf.reshape(outputs, [-1, self.max_doc_len, self.hidden_size])
 
         # with tf.name_scope('doc'):
@@ -136,8 +152,9 @@ class DNSC(object):
         # self.alpha = tf.reshape(alpha, [-1, self.max_doc_len, self.max_sen_len])
 
         with tf.name_scope('result'):
-            outputs = tf.concat(values=identity, axis=1)
-            d_hat = tf.tanh(tf.matmul(outputs, self.weights['softmax']) + self.biases['softmax'])
+            outputs = tf.concat(values=identity, axis=1, name='hop_outputs')
+            d_hat = tf.matmul(outputs, self.weights['softmax']) + self.biases['softmax']
+            d_hat = tf.tanh(d_hat, name='d_hat')
         return d_hat
 
     def build(self, data_iter):
@@ -148,9 +165,9 @@ class DNSC(object):
             (input_map['usr'], input_map['prd'], input_map['content'],
              input_map['rating'], input_map['len'])
 
-        self.x = tf.nn.embedding_lookup(self.embeddings['wrd_emb'], self.input_x)
-        self.usr = tf.nn.embedding_lookup(self.embeddings['usr_emb'], self.usrid)
-        self.prd = tf.nn.embedding_lookup(self.embeddings['prd_emb'], self.prdid)
+        self.x = lookup(self.embeddings['wrd_emb'], self.input_x, name='cur_wrd_embedding')
+        self.usr = lookup(self.embeddings['usr_emb'], self.usrid, name='cur_usr_embedding')
+        self.prd = lookup(self.embeddings['prd_emb'], self.prdid, name='cur_prd_embedding')
 
         # build the process of model
         self.d_hat = self.dnsc()
@@ -188,6 +205,9 @@ class DNSC(object):
         if dev_accuracy > self.best_dev_acc:
             self.best_dev_acc = dev_accuracy
             self.best_test_acc = test_accuracy
-        info = 'best dev acc: %.3f, best test acc: %.3f' % \
-            (self.best_dev_acc, self.best_test_acc)
+            info = 'NEW best dev acc: %.3f, NEW best test acc: %.3f' % \
+                (self.best_dev_acc, self.best_test_acc)
+        else:
+            info = 'best dev acc: %.3f, best test acc: %.3f' % \
+                (self.best_dev_acc, self.best_test_acc)
         return info

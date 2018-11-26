@@ -14,10 +14,10 @@ import dnsc
 
 # save current codes
 cur_time = time.time()
-os.system('mkdir code_history/' + cur_time)
-os.system('cp *.py code_history/' + cur_time + '/')
+os.system('mkdir code_history/' + str(cur_time))
+os.system('cp *.py code_history/' + str(cur_time) + '/')
+localtime = time.localtime(cur_time)
 
-output_file = open('code_history/' + cur_time + '/output.txt')
 
 params = {
     'debug_params': [('debug', False, 'Whether to debug or not')],
@@ -133,37 +133,54 @@ with tf.Graph().as_default():
                     op_results[j].append(cur_metrics[len(metrics) + j])
             return [metrics_total] + op_results
 
-        best_dev_acc = 0.
-        best_test_acc = 0.
-        for epoch in range(FLAGS.num_epochs):
-            # train on transet
-            sess.run(traininit)
-            trainlen = FLAGS.batch_size * FLAGS.evaluate_every
-            # when debugging, summary info is needed for tensorboard
-            if FLAGS.debug:
-                train_metrics, step, train_summary, _ = \
-                    run_set(sess, trainlen, metrics, (global_step, summary, train_op))
-            else:
-                train_metrics, step, _ = \
-                    run_set(sess, trainlen, metrics, (global_step, train_op, ))
-            info = model.output_metrics(train_metrics, trainlen)
-            print(stylize('Trainset:' + info, fg('yellow')))
+        try:
+            for epoch in range(FLAGS.num_epochs):
+                output_file = open('code_history/' + str(cur_time) + '/output.txt', 'a')
+                # train on transet
+                sess.run(traininit)
+                trainlen = FLAGS.batch_size * FLAGS.evaluate_every
+                # when debugging, summary info is needed for tensorboard
+                if FLAGS.debug:
+                    train_metrics, step, train_summary, _ = \
+                        run_set(sess, trainlen, metrics, (global_step, summary, train_op))
+                else:
+                    train_metrics, step, _ = \
+                        run_set(sess, trainlen, metrics, (global_step, train_op, ))
+                info = model.output_metrics(train_metrics, trainlen)
+                info = 'Trainset:' + info
+                print(stylize(info, fg('yellow')))
+                print >> output_file, info
 
-            if FLAGS.debug:
-                for i, s in zip(step, train_summary):
-                    train_writer.add_summary(s, i)
+                if FLAGS.debug:
+                    for i, s in zip(step, train_summary):
+                        train_writer.add_summary(s, i)
 
-            # test on devset
-            sess.run(devinit)
-            dev_metrics, = run_set(sess, devlen, metrics)
-            info = model.output_metrics(dev_metrics, devlen)
-            print(stylize('Devset:  ' + info, fg('green')))
+                # test on devset
+                sess.run(devinit)
+                dev_metrics, = run_set(sess, devlen, metrics)
+                info = model.output_metrics(dev_metrics, devlen)
+                info = 'Devset:  ' + info
+                print(stylize(info, fg('green')))
+                print >> output_file, info
 
-            # test on testset
-            sess.run(testinit)
-            test_metrics, = run_set(sess, testlen, metrics)
-            info = model.output_metrics(test_metrics, testlen)
-            print(stylize('Testset: ' + info, fg('red')))
+                # test on testset
+                sess.run(testinit)
+                test_metrics, = run_set(sess, testlen, metrics)
+                info = model.output_metrics(test_metrics, testlen)
+                info = 'Testset: ' + info
+                print(stylize(info, fg('red')))
+                print >> output_file, info
 
-            info = model.record_metrics(dev_metrics, test_metrics, devlen, testlen)
-            print(stylize('Epoch %d finished, ' % epoch + info, fg('white')))
+                info = model.record_metrics(dev_metrics, test_metrics, devlen, testlen)
+                info = 'Epoch %d finished, ' % epoch + info
+                print(stylize(info, fg('white')))
+                print >> output_file, info
+
+                output_file.close()
+
+        except KeyboardInterrupt:
+            print('Interrupted')
+            best_dev_acc = model.best_dev_acc
+            src = 'code_history/' + str(cur_time)
+            dest = src + 'acc' + str(best_dev_acc)
+            os.system('mv ' + src + ' ' + dest)

@@ -1,14 +1,12 @@
+import ipdb
+
 import tensorflow as tf
 from tensorflow import constant as const
 from colored import stylize, fg
 lookup = tf.nn.embedding_lookup
 
 
-def var(name, shape, initializer):
-    return tf.get_variable(name, shape=shape, initializer=initializer)
-
-
-class DNSC(object):
+class MLSTM(object):
 
     def __init__(self, args):
         self.max_sen_len = args['max_sen_len']
@@ -35,58 +33,116 @@ class DNSC(object):
         self.best_test_acc = .0
 
         # initializers for parameters
-        self.weights_initializer = tf.contrib.layers.xavier_initializer()
-        self.biases_initializer = tf.contrib.layers.xavier_initializer()
-        self.emb_initializer = tf.initializers.zeros()
+        weights_initializer = tf.contrib.layers.xavier_initializer()
+        biases_initializer = tf.contrib.layers.xavier_initializer()
+        emb_initializer = tf.initializers.zeros()
+
+        def var(name, shape, initializer):
+            return tf.get_variable(name, shape=shape, initializer=initializer)
 
         hsize = self.hidden_size
+        # weights in the model
+        with tf.variable_scope('weights'):
+            self.weights = {
+                'softmax_w': var('softmax_w', [hsize * 2, self.cls_cnt], weights_initializer),
+                'softmax_wu': var('softmax_wu', [hsize, self.cls_cnt], weights_initializer),
+                'softmax_wp': var('softmax_wp', [hsize, self.cls_cnt], weights_initializer),
+            }
+            for prefix in ['sen_', 'doc_']:
+                for suffix in ['u', 'p']:
+                    def fix(s):
+                        return prefix + s + suffix
+                    # self.weights[fix('bkg_w')] = var(fix('bkg_w'), [hsize, hsize], weights_initializer)
+                    self.weights[fix('wh')] = var(fix('wh'), [hsize, hsize], weights_initializer)
+                    self.weights[fix('w')] = var(fix('w'), [hsize, hsize], weights_initializer)
+                    self.weights[fix('v')] = var(fix('v'), [hsize, 1], weights_initializer)
+                    self.weights[fix('convert_w')] = var(fix('convert_w'), [hsize, hsize], weights_initializer)
+                    self.weights[fix('wz_old')] = var(fix('wz_old'), [hsize, hsize], weights_initializer)
+                    self.weights[fix('wz_new')] = var(fix('wz_new'), [hsize, hsize], weights_initializer)
+
+        # biases in the model
+        with tf.variable_scope('biases'):
+            self.biases = {
+                'softmax_b': var('softmax_b', [self.cls_cnt], biases_initializer),
+                'softmax_bu': var('softmax_bu', [self.cls_cnt], biases_initializer),
+                'softmax_bp': var('softmax_bp', [self.cls_cnt], biases_initializer),
+            }
+            for prefix in ['sen_', 'doc_']:
+                for suffix in ['u', 'p']:
+                    def fix(s):
+                        return prefix + s + suffix
+                    self.biases[fix('convert_b')] = var(fix('convert_b'), [hsize], biases_initializer)
+                    self.biases[fix('attention_b')] = var(fix('attention_b'), [hsize], biases_initializer)
+                    self.biases[fix('zb')] = var(fix('zb'), [hsize], biases_initializer)
 
         # embeddings in the model
         with tf.variable_scope('emb'):
             self.embeddings = {
                 'wrd_emb': const(self.embedding, name='wrd_emb', dtype=tf.float32),
                 # 'wrd_emb': tf.Variable(embedding, name='wrd_emb', dtype=tf.float32),
-                'usr_emb': var('usr_emb', [self.usr_cnt, hsize], self.emb_initializer),
-                'prd_emb': var('prd_emb', [self.prd_cnt, hsize], self.emb_initializer),
+                'usr_emb': var('usr_emb', [self.usr_cnt, hsize], emb_initializer),
+                'prd_emb': var('prd_emb', [self.prd_cnt, hsize], emb_initializer),
             }
 
         # for tensorboard
         if self.debug:
             tf.summary.histogram('usr_emb', self.embeddings['usr_emb'])
             tf.summary.histogram('prd_emb', self.embeddings['prd_emb'])
-            # tf.summary.histogram('sen_convert_wu', self.weights['sen_convert_wu'])
-            # tf.summary.histogram('sen_convert_wp', self.weights['sen_convert_wp'])
-            # tf.summary.histogram('sen_convert_wu', self.weights['sen_convert_wu'])
-            # tf.summary.histogram('sen_convert_wp', self.weights['sen_convert_wp'])
+            tf.summary.histogram('sen_convert_wu', self.weights['sen_convert_wu'])
+            tf.summary.histogram('sen_convert_wp', self.weights['sen_convert_wp'])
+            tf.summary.histogram('sen_convert_wu', self.weights['sen_convert_wu'])
+            tf.summary.histogram('sen_convert_wp', self.weights['sen_convert_wp'])
 
     def dhuapa(self, x, usr, prd, convert_flag):
-        self.inputs = tf.reshape(x, [-1, self.max_sen_len, self.emb_dim])
-        self.sen_len = tf.reshape(self.sen_len, [-1])
+        self.inputs = x
+        # self.inputs = tf.reshape(x, [-1, self.max_sen_len, self.emb_dim])
+        # self.sen_len = tf.reshape(self.sen_len, [-1])
 
         outputs = []
         for scope, suffix, identity in zip(['user_block', 'product_block'],
                                            ['u', 'p'], [usr, prd]):
             with tf.variable_scope(scope):
-                outputs.append(self.dnsc(identity, convert_flag))
+                sen_hop_args = {
+                    'convert_w': [self.weights['sen_convert_w' + suffix]],
+                    'convert_b': [self.biases['sen_convert_b' + suffix]],
+                    'wz_old': self.weights['sen_wz_old' + suffix],
+                    'wz_new': self.weights['sen_wz_new' + suffix],
+                    'zb': self.biases['sen_zb' + suffix]
+                }
+                doc_hop_args = {
+                    'convert_w': [self.weights['doc_convert_w' + suffix]],
+                    'convert_b': [self.biases['doc_convert_b' + suffix]],
+                    'wz_old': self.weights['doc_wz_old' + suffix],
+                    'wz_new': self.weights['doc_wz_new' + suffix],
+                    'zb': self.biases['doc_zb' + suffix]
+                }
+                sen_attention_args = {'v': self.weights['sen_v' + suffix],
+                                      'wh': self.weights['sen_wh' + suffix],
+                                      'wi': [self.weights['sen_w' + suffix]],
+                                      'i': [identity],
+                                      'b': self.biases['sen_attention_b' + suffix],
+                                      'doc_len': self.sen_len,
+                                      'real_max_len': self.max_sen_len}
+                doc_attention_args = {'v': self.weights['doc_v' + suffix],
+                                      'wh': self.weights['doc_wh' + suffix],
+                                      'wi': [self.weights['doc_w' + suffix]],
+                                      'i': [identity],
+                                      'b': self.biases['doc_attention_b' + suffix],
+                                      'doc_len': self.doc_len,
+                                      'real_max_len': self.max_doc_len}
+                outputs.append(self.mlstm(sen_hop_args, doc_hop_args,
+                                          sen_attention_args, doc_attention_args, convert_flag))
 
         with tf.variable_scope('result'):
-
-            softmax_w = var('softmax_w', [self.hidden_size * 2, self.cls_cnt], self.weights_initializer)
-            softmax_wu = var('softmax_wu', [self.hidden_size, self.cls_cnt], self.weights_initializer)
-            softmax_wp = var('softmax_wp', [self.hidden_size, self.cls_cnt], self.weights_initializer)
-
-            softmax_b = var('softmax_b', [self.cls_cnt], self.biases_initializer)
-            softmax_bu = var('softmax_bu', [self.cls_cnt], self.biases_initializer)
-            softmax_bp = var('softmax_bp', [self.cls_cnt], self.biases_initializer)
-
-            d_hatu = tf.matmul(outputs[0], softmax_wu) + softmax_bu
-            d_hatp = tf.matmul(outputs[1], softmax_wp) + softmax_bp
+            d_hatu = tf.matmul(outputs[0], self.weights['softmax_wu']) + self.biases['softmax_bu']
+            d_hatp = tf.matmul(outputs[1], self.weights['softmax_wp']) + self.biases['softmax_bp']
             outputs = tf.concat(outputs, axis=1, name='dhuapa_output')
-            d_hat = tf.matmul(outputs, softmax_w) + softmax_b
+            d_hat = tf.matmul(outputs, self.weights['softmax_w']) + self.biases['softmax_b']
             # d_hat = tf.tanh(d_hat, name='d_hat')
         return d_hat, d_hatu, d_hatp
 
-    def dnsc(self, identity, convert_flag):
+    def mlstm(self, sen_hop_args, doc_hop_args,
+              sen_attention_args, doc_attention_args, convert_flag):
 
         def lstm(inputs, sequence_length, hidden_size, scope):
             outputs, state = tf.nn.dynamic_rnn(
@@ -141,6 +197,7 @@ class DNSC(object):
                 if attention_shape is not None:
                     sentence = tf.reshape(sentence, sentence_shape)
                 for i, alpha in enumerate(alphas):
+                    ipdb.set_trace()
                     new_background[i] = tf.matmul(alpha, sentence)
                     new_background[i] = tf.reshape(new_background[i], [-1, self.hidden_size],
                                                    name='new_background' + str(i))
@@ -162,66 +219,23 @@ class DNSC(object):
                             new_background[i] = background[i] + new_background[i]
             return new_background
 
-        def create_args(identity, length, max_length):
-            wh = var('wh', [self.hidden_size, self.hidden_size], self.weights_initializer)
-            w = var('w', [self.hidden_size, self.hidden_size], self.weights_initializer)
-            v = var('v', [self.hidden_size, 1], self.weights_initializer)
-            convert_w = var('convert_w', [self.hidden_size, self.hidden_size], self.weights_initializer)
-            wz_old = var('wz_old', [self.hidden_size, self.hidden_size], self.weights_initializer)
-            wz_new = var('wz_new', [self.hidden_size, self.hidden_size], self.weights_initializer)
+        lstm_outputs, _state = lstm(self.inputs, self.sen_len, self.hidden_size, 'lstm')
+        # convert_w = [self.weights['sen_convert_wu'], self.weights['sen_convert_wp']]
+        # convert_b = [self.biases['sen_convert_bu'], self.biases['sen_convert_bp']]
 
-            convert_b = var('convert_b', [self.hidden_size], self.biases_initializer)
-            attention_b = var('attention_b', [self.hidden_size], self.biases_initializer)
-            zb = var('zb', [self.hidden_size], self.biases_initializer)
+        sen_bkg = sen_attention_args['i']
+        for ihop in range(self.sen_hop_cnt):
+            sen_attention_args['i'] = sen_bkg
+            attention_shape, sentence_shape = None, None
+            # attention_shape = [-1, self.max_doc_len * self.max_sen_len, self.hidden_size]
+            # sentence_shape = [-1, self.max_sen_len, self.hidden_size]
+            outputs = hop('hop' + str(ihop), ihop == self.sen_hop_cnt - 1, lstm_outputs,
+                          sentence_shape, attention_shape, sen_bkg,
+                          sen_hop_args, sen_attention_args, convert_flag)
+            # outputs = [tf.reshape(bkg, [-1, self.max_doc_len, self.hidden_size])
+            #            for bkg in outputs]
 
-            hop_args = {
-                'convert_w': [convert_w],
-                'convert_b': [convert_b],
-                'wz_old': wz_old,
-                'wz_new': wz_new,
-                'zb': zb}
-            attention_args = {'v': v,
-                              'wh': wh,
-                              'wi': [w],
-                              'i': [identity],
-                              'b': [attention_b],
-                              'doc_len': length,
-                              'real_max_len': max_length}
-            return hop_args, attention_args
-
-        with tf.variable_scope('sentence_layer'):
-            lstm_outputs, _state = lstm(self.inputs, self.sen_len, self.hidden_size, 'lstm')
-            # convert_w = [self.weights['sen_convert_wu'], self.weights['sen_convert_wp']]
-            # convert_b = [self.biases['sen_convert_bu'], self.biases['sen_convert_bp']]
-            hop_args, attention_args = create_args(identity, self.sen_len, self.max_sen_len)
-
-            sen_bkg = attention_args['i']
-            for ihop in range(self.sen_hop_cnt):
-                attention_args['i'] = sen_bkg
-                attention_shape = [-1, self.max_doc_len * self.max_sen_len, self.hidden_size]
-                sentence_shape = [-1, self.max_sen_len, self.hidden_size]
-                outputs = hop('hop' + str(ihop), ihop == self.sen_hop_cnt - 1, lstm_outputs,
-                              sentence_shape, attention_shape, sen_bkg,
-                              hop_args, attention_args, convert_flag)
-                outputs = [tf.reshape(bkg, [-1, self.max_doc_len, self.hidden_size])
-                           for bkg in outputs]
-        outputs = sum(outputs)
-
-        with tf.variable_scope('document_layer'):
-            hop_args, attention_args = create_args(identity, self.doc_len, self.max_doc_len)
-            lstm_outputs, _state = lstm(outputs, self.doc_len, self.hidden_size, 'lstm')
-            # convert_w = [self.weights['doc_convert_wu'], self.weights['doc_convert_wp']]
-            # convert_b = [self.biases['doc_convert_bu'], self.biases['doc_convert_bp']]
-
-            doc_bkg = attention_args['i']
-            for ihop in range(self.doc_hop_cnt):
-                attention_args['i'] = doc_bkg
-                attention_shape = None
-                sentence_shape = None
-                doc_bkg = hop('hop' + str(ihop), ihop == self.doc_hop_cnt - 1, lstm_outputs,
-                              sentence_shape, attention_shape, doc_bkg,
-                              hop_args, attention_args, convert_flag)
-        outputs = tf.concat(values=doc_bkg, axis=1, name='outputs')
+        outputs = tf.concat(values=outputs, axis=1, name='outputs')
 
         return outputs
 

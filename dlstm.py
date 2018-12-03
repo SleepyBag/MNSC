@@ -4,7 +4,7 @@ from colored import stylize, fg
 lookup = tf.nn.embedding_lookup
 
 
-class DNSC(object):
+class DLSTM(object):
 
     def __init__(self, args):
         self.max_sen_len = args['max_sen_len']
@@ -92,27 +92,14 @@ class DNSC(object):
             tf.summary.histogram('sen_convert_wp', self.weights['sen_convert_wp'])
 
     def dhuapa(self, x, usr, prd, convert_flag):
-        self.inputs = tf.reshape(x, [-1, self.max_sen_len, self.emb_dim])
-        self.sen_len = tf.reshape(self.sen_len, [-1])
+        self.inputs = x
+        # self.inputs = tf.reshape(x, [-1, self.max_sen_len, self.emb_dim])
+        # self.sen_len = tf.reshape(self.sen_len, [-1])
 
         outputs = []
         for scope, suffix, identity in zip(['user_block', 'product_block'],
                                            ['u', 'p'], [usr, prd]):
             with tf.variable_scope(scope):
-                # for attention
-                # sen_wbkg = [self.weights['sen_w' + suffix]]
-                # doc_wbkg = [self.weights['doc_w' + suffix]]
-                # sen_bkg = [identity]
-                # doc_bkg = [identity]
-                # sen_v = self.weights['sen_v' + suffix]
-                # doc_v = self.weights['doc_v' + suffix]
-                # sen_wh = self.weights['sen_wh' + suffix]
-                # doc_wh = self.weights['doc_wh' + suffix]
-                # sen_b = self.biases['sen_attention_b' + suffix]
-                # doc_b = self.biases['doc_attention_b' + suffix]
-                # sen_wz = self.weights['sen_wz' + suffix]
-                # doc_wz = self.weights['doc_wz' + suffix]
-                # for hop
                 sen_hop_args = {
                     'convert_w': [self.weights['sen_convert_w' + suffix]],
                     'convert_b': [self.biases['sen_convert_b' + suffix]],
@@ -141,8 +128,8 @@ class DNSC(object):
                                       'b': self.biases['doc_attention_b' + suffix],
                                       'doc_len': self.doc_len,
                                       'real_max_len': self.max_doc_len}
-                outputs.append(self.dnsc(sen_hop_args, doc_hop_args,
-                                         sen_attention_args, doc_attention_args, convert_flag))
+                outputs.append(self.dlstm(sen_hop_args, doc_hop_args,
+                                          sen_attention_args, doc_attention_args, convert_flag))
 
         with tf.variable_scope('result'):
             d_hatu = tf.matmul(outputs[0], self.weights['softmax_wu']) + self.biases['softmax_bu']
@@ -152,8 +139,8 @@ class DNSC(object):
             # d_hat = tf.tanh(d_hat, name='d_hat')
         return d_hat, d_hatu, d_hatp
 
-    def dnsc(self, sen_hop_args, doc_hop_args,
-             sen_attention_args, doc_attention_args, convert_flag):
+    def dlstm(self, sen_hop_args, doc_hop_args,
+              sen_attention_args, doc_attention_args, convert_flag):
 
         def lstm(inputs, sequence_length, hidden_size, scope):
             outputs, state = tf.nn.dynamic_rnn(
@@ -196,7 +183,7 @@ class DNSC(object):
             return ans
 
         def hop(scope, last, sentence, sentence_shape, attention_shape,
-                background, hop_args, attention_args, convert_flag):
+                background, hop_args, attention_args, convert_flag, return_type):
             with tf.variable_scope(scope):
                 new_background = [None] * len(background)
                 sentence = tf.stop_gradient(sentence) \
@@ -229,37 +216,23 @@ class DNSC(object):
                             new_background[i] = background[i] + new_background[i]
             return new_background
 
-        with tf.variable_scope('sentence_layer'):
-            lstm_outputs, _state = lstm(self.inputs, self.sen_len, self.hidden_size, 'lstm')
-            # convert_w = [self.weights['sen_convert_wu'], self.weights['sen_convert_wp']]
-            # convert_b = [self.biases['sen_convert_bu'], self.biases['sen_convert_bp']]
+        lstm_outputs, _state = lstm(self.inputs, self.sen_len, self.hidden_size, 'lstm')
+        # convert_w = [self.weights['sen_convert_wu'], self.weights['sen_convert_wp']]
+        # convert_b = [self.biases['sen_convert_bu'], self.biases['sen_convert_bp']]
 
-            sen_bkg = sen_attention_args['i']
-            for ihop in range(self.sen_hop_cnt):
-                sen_attention_args['i'] = sen_bkg
-                attention_shape = [-1, self.max_doc_len * self.max_sen_len, self.hidden_size]
-                sentence_shape = [-1, self.max_sen_len, self.hidden_size]
-                outputs = hop('hop' + str(ihop), ihop == self.sen_hop_cnt - 1, lstm_outputs,
-                              sentence_shape, attention_shape, sen_bkg,
-                              sen_hop_args, sen_attention_args, convert_flag)
-                outputs = [tf.reshape(bkg, [-1, self.max_doc_len, self.hidden_size])
-                           for bkg in outputs]
-        outputs = sum(outputs)
+        sen_bkg = sen_attention_args['i']
+        for ihop in range(self.sen_hop_cnt):
+            sen_attention_args['i'] = sen_bkg
+            attention_shape, sentence_shape = None, None
+            # attention_shape = [-1, self.max_doc_len * self.max_sen_len, self.hidden_size]
+            # sentence_shape = [-1, self.max_sen_len, self.hidden_size]
+            outputs = hop('hop' + str(ihop), ihop == self.sen_hop_cnt - 1, lstm_outputs,
+                          sentence_shape, attention_shape, sen_bkg,
+                          sen_hop_args, sen_attention_args, convert_flag)
+            # outputs = [tf.reshape(bkg, [-1, self.max_doc_len, self.hidden_size])
+            #            for bkg in outputs]
 
-        with tf.variable_scope('document_layer'):
-            lstm_outputs, _state = lstm(outputs, self.doc_len, self.hidden_size, 'lstm')
-            # convert_w = [self.weights['doc_convert_wu'], self.weights['doc_convert_wp']]
-            # convert_b = [self.biases['doc_convert_bu'], self.biases['doc_convert_bp']]
-
-            doc_bkg = doc_attention_args['i']
-            for ihop in range(self.doc_hop_cnt):
-                doc_attention_args['i'] = doc_bkg
-                attention_shape = None
-                sentence_shape = None
-                doc_bkg = hop('hop' + str(ihop), ihop == self.doc_hop_cnt - 1, lstm_outputs,
-                              sentence_shape, attention_shape, doc_bkg,
-                              doc_hop_args, doc_attention_args, convert_flag)
-        outputs = tf.concat(values=doc_bkg, axis=1, name='outputs')
+        outputs = tf.concat(values=outputs, axis=1, name='outputs')
 
         return outputs
 

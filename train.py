@@ -10,9 +10,13 @@ from tqdm import tqdm
 import data
 from dnsc import DNSC
 from dnsc2 import DNSC2
+from dlstm import DLSTM
+from mlstm import MLSTM
 from colored import fg, stylize
 import dnsc
 import dnsc2
+import dlstm
+import mlstm
 import math
 
 
@@ -78,8 +82,10 @@ with tf.Graph().as_default():
     print("Loading data...")
     datasets = ['data/' + flags.dataset + s for s in ['/train.ss', '/dev.ss', '/test.ss']]
     embeddingpath = 'data/' + flags.dataset + '/embedding.txt'
+    hierarchy = flags.model in ['dnsc']
     datasets, lengths, embedding, usr_cnt, prd_cnt = \
-        data.build_dataset(datasets, embeddingpath, flags.max_doc_len, flags.max_sen_len)
+        data.build_dataset(datasets, embeddingpath, flags.max_doc_len,
+                           flags.max_sen_len, hierarchy)
     trainset, devset, testset = datasets
     trainlen, devlen, testlen = lengths
     trainset = trainset.shuffle(100000).batch(flags.batch_size)
@@ -117,6 +123,12 @@ with tf.Graph().as_default():
         elif flags.model == 'dnsc2':
             model = DNSC2(model_params)
             cur_model = dnsc2
+        if flags.model == 'dlstm':
+            model = DLSTM(model_params)
+            cur_model = dlstm
+        if flags.model == 'mlstm':
+            model = MLSTM(model_params)
+            cur_model = mlstm
 
         data_iter = tf.data.Iterator.from_structure(trainset.output_types,
                                                     output_shapes=trainset.output_shapes)

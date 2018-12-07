@@ -8,7 +8,7 @@ def var(name, shape, initializer):
     return tf.get_variable(name, shape=shape, initializer=initializer)
 
 
-class DNSC(object):
+class MLDHUAPA(object):
 
     def __init__(self, args):
         self.max_sen_len = args['max_sen_len']
@@ -67,7 +67,7 @@ class DNSC(object):
         for scope, suffix, identity in zip(['user_block', 'product_block'],
                                            ['u', 'p'], [usr, prd]):
             with tf.variable_scope(scope):
-                outputs.append(self.dnsc(identity, convert_flag))
+                outputs.append(self.mldhuapa(x, identity, convert_flag))
 
         with tf.variable_scope('result'):
 
@@ -86,7 +86,7 @@ class DNSC(object):
             # d_hat = tf.tanh(d_hat, name='d_hat')
         return d_hat, d_hatu, d_hatp
 
-    def dnsc(self, identity, convert_flag):
+    def mldhuapa(self, x, identity, convert_flag):
 
         def lstm(inputs, sequence_length, hidden_size, scope):
             outputs, state = tf.nn.bidirectional_dynamic_rnn(
@@ -199,33 +199,58 @@ class DNSC(object):
                               'real_max_len': max_length}
             return hop_args, attention_args
 
-        with tf.variable_scope('sentence_layer'):
-            lstm_outputs, _state = lstm(self.inputs, self.sen_len, self.hidden_size, 'lstm')
-            lstm_outputs = tf.reshape(lstm_outputs, [-1, self.max_sen_len, self.hidden_size])
-            # convert_w = [self.weights['sen_convert_wu'], self.weights['sen_convert_wp']]
-            # convert_b = [self.biases['sen_convert_bu'], self.biases['sen_convert_bp']]
-            hop_args, attention_args = create_args(identity, self.sen_len, self.max_sen_len)
+        def one_layer(self, x, identity, max_sen_len, sen_len, tile_cnt, convert_flag):
+            with tf.variable_scope('sentence_layer'):
+                x = tf.reshape(x, [-1, max_sen_len, self.hidden_size])
+                sen_len = tf.reshape(sen_len, [-1])
 
-            sen_bkg = attention_args['i']
-            for i, _ in enumerate(sen_bkg):
-                sen_bkg[i] = tf.tile(sen_bkg[i][:, None, :], (1, self.max_doc_len, 1))
-                sen_bkg[i] = tf.reshape(sen_bkg[i], (-1, self.hidden_size))
-            for ihop in range(self.sen_hop_cnt):
-                attention_args['i'] = sen_bkg
-                attention_shape = None
-                sentence_shape = None
-                # attention_shape = [-1, self.max_doc_len * self.max_sen_len, self.hidden_size]
-                # sentence_shape = [-1, self.max_sen_len, self.hidden_size]
-                sen_bkg = hop('hop' + str(ihop), ihop == self.sen_hop_cnt - 1, lstm_outputs,
-                              sentence_shape, attention_shape, sen_bkg,
-                              hop_args, attention_args, convert_flag)
-        outputs = [tf.reshape(bkg, [-1, self.max_doc_len, self.hidden_size])
-                   for bkg in sen_bkg]
-        outputs = sum(outputs)
+                lstm_outputs, _state = lstm(x, sen_len, self.hidden_size, 'lstm')
+                lstm_outputs = tf.reshape(lstm_outputs, [-1, max_sen_len, self.hidden_size])
+                # convert_w = [self.weights['sen_convert_wu'], self.weights['sen_convert_wp']]
+                # convert_b = [self.biases['sen_convert_bu'], self.biases['sen_convert_bp']]
+                hop_args, attention_args = create_args(identity, sen_len, max_sen_len)
+
+                sen_bkg = attention_args['i']
+                for i, _ in enumerate(sen_bkg):
+                    sen_bkg[i] = tf.tile(sen_bkg[i][:, None, :], (1, tile_cnt, 1))
+                    sen_bkg[i] = tf.reshape(sen_bkg[i], (-1, self.hidden_size))
+                for ihop in range(self.sen_hop_cnt):
+                    attention_args['i'] = sen_bkg
+                    attention_shape = None
+                    sentence_shape = None
+                    # attention_shape = [-1, self.max_doc_len * self.max_sen_len, self.hidden_size]
+                    # sentence_shape = [-1, self.max_sen_len, self.hidden_size]
+                    sen_bkg = hop('hop' + str(ihop), ihop == self.sen_hop_cnt - 1, lstm_outputs,
+                                  sentence_shape, attention_shape, sen_bkg,
+                                  hop_args, attention_args, convert_flag)
+            # outputs = [tf.reshape(bkg, [-1, 10, self.hidden_size])
+            #            for bkg in sen_bkg]
+            outputs = sum(sen_bkg)
+            return outputs
+
+        sen_len = 1 - tf.cast(tf.equal(x, 0), tf.int32)
+        x = lookup(self.embeddings['wrd_emb'], x, name='cur_wrd_embedding')
+        max_doc_len = self.max_doc_len
+        # max_sen_len = 10
+
+        layer_cnt = 2
+        max_sen_lens = [8, 5]
+        for layer, max_sen_len in zip(range(layer_cnt), max_sen_lens):
+            with tf.variable_scope('layer' + str(layer)):
+                max_doc_len //= max_sen_len
+                # x = tf.reshape(x, [-1, max_doc_len, 10, self.hidden_size])
+                sen_len = tf.reshape(sen_len, [-1, max_doc_len, max_sen_len])
+                sen_len = tf.reduce_sum(1 - tf.cast(tf.equal(sen_len, 0), tf.int32), axis=2)
+
+                x = one_layer(self, x, identity, max_sen_len, sen_len, max_doc_len, convert_flag)
+
+        sen_len = tf.reshape(sen_len, [-1, max_doc_len])
+        sen_len = tf.reduce_sum(1 - tf.cast(tf.equal(sen_len, 0), tf.int32), axis=1)
+        x = tf.reshape(x, [-1, max_doc_len, self.hidden_size])
 
         with tf.variable_scope('document_layer'):
-            hop_args, attention_args = create_args(identity, self.doc_len, self.max_doc_len)
-            lstm_outputs, _state = lstm(outputs, self.doc_len, self.hidden_size, 'lstm')
+            hop_args, attention_args = create_args(identity, sen_len, max_doc_len)
+            lstm_outputs, _state = lstm(x, sen_len, self.hidden_size, 'lstm')
             # convert_w = [self.weights['doc_convert_wu'], self.weights['doc_convert_wp']]
             # convert_b = [self.biases['doc_convert_bu'], self.biases['doc_convert_bp']]
 
@@ -249,12 +274,11 @@ class DNSC(object):
                 (input_map['usr'], input_map['prd'], input_map['content'],
                  input_map['rating'], input_map['doc_len'], input_map['sen_len'])
 
-            x = lookup(self.embeddings['wrd_emb'], input_x, name='cur_wrd_embedding')
             usr = lookup(self.embeddings['usr_emb'], usrid, name='cur_usr_embedding')
             prd = lookup(self.embeddings['prd_emb'], prdid, name='cur_prd_embedding')
 
         # build the process of model
-        d_hat, d_hatu, d_hatp = self.dhuapa(x, usr, prd, self.convert_flag)
+        d_hat, d_hatu, d_hatp = self.dhuapa(input_x, usr, prd, self.convert_flag)
         prediction = tf.argmax(d_hat, 1, name='predictions')
 
         with tf.variable_scope("loss"):

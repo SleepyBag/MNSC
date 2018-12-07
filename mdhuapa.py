@@ -1,3 +1,4 @@
+import ipdb
 import tensorflow as tf
 from tensorflow import constant as const
 from colored import stylize, fg
@@ -8,7 +9,7 @@ def var(name, shape, initializer):
     return tf.get_variable(name, shape=shape, initializer=initializer)
 
 
-class DNSC(object):
+class MDHUAPA(object):
 
     def __init__(self, args):
         self.max_sen_len = args['max_sen_len']
@@ -36,7 +37,7 @@ class DNSC(object):
 
         # initializers for parameters
         self.weights_initializer = tf.contrib.layers.xavier_initializer()
-        self.biases_initializer = tf.contrib.layers.xavier_initializer()
+        self.biases_initializer = tf.initializers.zeros()
         self.emb_initializer = tf.initializers.zeros()
 
         hsize = self.hidden_size
@@ -59,34 +60,67 @@ class DNSC(object):
             # tf.summary.histogram('sen_convert_wu', self.weights['sen_convert_wu'])
             # tf.summary.histogram('sen_convert_wp', self.weights['sen_convert_wp'])
 
-    def dhuapa(self, x, usr, prd, convert_flag):
-        self.inputs = tf.reshape(x, [-1, self.max_sen_len, self.emb_dim])
-        self.sen_len = tf.reshape(self.sen_len, [-1])
+    def fold(self, x, sen_len):
+        with tf.variable_scope('fold'):
+            x = tf.reshape(x, [-1, self.max_sen_len // sen_len, sen_len])
+            aug_x = tf.manip.roll(x, shift=-1, axis=1)
+            aug_x2 = tf.manip.roll(x, shift=-2, axis=1)
+            x = tf.concat([x, aug_x, aug_x2], axis=2)
+            # sen_len = tf.argmin(x, axis=2)
+            sen_len = tf.reduce_sum(1 - tf.cast(tf.equal(x, 0), tf.int32), axis=2)
+            doc_len = tf.reduce_sum(1 - tf.cast(tf.equal(sen_len, 0), tf.int32), axis=1)
+            x = lookup(self.embeddings['wrd_emb'], x, name='cur_wrd_embedding')
+        return x, sen_len, doc_len
 
-        outputs = []
-        for scope, suffix, identity in zip(['user_block', 'product_block'],
-                                           ['u', 'p'], [usr, prd]):
-            with tf.variable_scope(scope):
-                outputs.append(self.dnsc(identity, convert_flag))
+    def mdhuapa(self, x, usr, prd, convert_flag):
+        folds = [15]
+        logitsu, logitsp = [], []
+        for i, max_sen_len in enumerate(folds):
+            with tf.variable_scope('divide' + str(i)):
+                max_doc_len = self.max_sen_len // max_sen_len
+                logitu, logitp = self.dhuapa(x, max_sen_len, max_doc_len, usr, prd, convert_flag)
+                logitsu.append(logitu)
+                logitsp.append(logitp)
+
+        logitsu = tf.concat(logitsu, axis=1)
+        logitsp = tf.concat(logitsu, axis=1)
 
         with tf.variable_scope('result'):
 
-            softmax_w = var('softmax_w', [self.hidden_size * 2, self.cls_cnt], self.weights_initializer)
-            softmax_wu = var('softmax_wu', [self.hidden_size, self.cls_cnt], self.weights_initializer)
-            softmax_wp = var('softmax_wp', [self.hidden_size, self.cls_cnt], self.weights_initializer)
+            softmax_w = var('softmax_w', [self.hidden_size * 2 * len(folds), self.cls_cnt], self.weights_initializer)
+            # softmax_wup = var('softmax_wup', [self.hidden_size * 2 * len(folds), self.cls_cnt], self.weights_initializer)
+
+            softmax_wu = var('softmax_wu', [self.hidden_size * len(folds), self.cls_cnt], self.weights_initializer)
+            softmax_wp = var('softmax_wp', [self.hidden_size * len(folds), self.cls_cnt], self.weights_initializer)
 
             softmax_b = var('softmax_b', [self.cls_cnt], self.biases_initializer)
             softmax_bu = var('softmax_bu', [self.cls_cnt], self.biases_initializer)
             softmax_bp = var('softmax_bp', [self.cls_cnt], self.biases_initializer)
 
-            d_hatu = tf.matmul(outputs[0], softmax_wu) + softmax_bu
-            d_hatp = tf.matmul(outputs[1], softmax_wp) + softmax_bp
-            outputs = tf.concat(outputs, axis=1, name='dhuapa_output')
+            d_hatu = tf.matmul(logitsu, softmax_wu) + softmax_bu
+            d_hatp = tf.matmul(logitsp, softmax_wp) + softmax_bp
+            outputs = tf.concat([logitsu, logitsp], axis=1, name='dhuapa_output')
             d_hat = tf.matmul(outputs, softmax_w) + softmax_b
             # d_hat = tf.tanh(d_hat, name='d_hat')
         return d_hat, d_hatu, d_hatp
 
-    def dnsc(self, identity, convert_flag):
+    def dhuapa(self, x, max_sen_len, max_doc_len, usr, prd, convert_flag):
+        # self.inputs = tf.reshape(x, [-1, self.max_sen_len, self.emb_dim])
+        # self.sen_len = tf.reshape(self.sen_len, [-1])
+        x, sen_len, doc_len = self.fold(x, max_sen_len)
+        max_sen_len *= 3
+
+        outputs = []
+        for scope, identity in zip(['user_block', 'product_block'], [usr, prd]):
+            with tf.variable_scope(scope):
+                outputs.append(self.dnsc(x, max_sen_len, max_doc_len, sen_len, doc_len,
+                                         identity, convert_flag))
+
+        return outputs[0], outputs[1]
+
+    def dnsc(self, x, max_sen_len, max_doc_len, sen_len, doc_len, identity, convert_flag):
+        x = tf.reshape(x, [-1, max_sen_len, self.hidden_size])
+        sen_len = tf.reshape(sen_len, [-1])
 
         def lstm(inputs, sequence_length, hidden_size, scope):
             outputs, state = tf.nn.bidirectional_dynamic_rnn(
@@ -197,18 +231,25 @@ class DNSC(object):
                               'b': [attention_b],
                               'doc_len': length,
                               'real_max_len': max_length}
+
+            if self.debug:
+                tf.summary.histogram('convert_w', convert_w)
+                tf.summary.histogram('convert_b', convert_b)
+                tf.summary.histogram('zb', zb)
+                tf.summary.histogram('wz_old', wz_old)
+                tf.summary.histogram('wz_new', wz_new)
             return hop_args, attention_args
 
         with tf.variable_scope('sentence_layer'):
-            lstm_outputs, _state = lstm(self.inputs, self.sen_len, self.hidden_size, 'lstm')
-            lstm_outputs = tf.reshape(lstm_outputs, [-1, self.max_sen_len, self.hidden_size])
+            lstm_outputs, _state = lstm(x, sen_len, self.hidden_size, 'lstm')
+            lstm_outputs = tf.reshape(lstm_outputs, [-1, max_sen_len, self.hidden_size])
             # convert_w = [self.weights['sen_convert_wu'], self.weights['sen_convert_wp']]
             # convert_b = [self.biases['sen_convert_bu'], self.biases['sen_convert_bp']]
-            hop_args, attention_args = create_args(identity, self.sen_len, self.max_sen_len)
+            hop_args, attention_args = create_args(identity, sen_len, max_sen_len)
 
             sen_bkg = attention_args['i']
             for i, _ in enumerate(sen_bkg):
-                sen_bkg[i] = tf.tile(sen_bkg[i][:, None, :], (1, self.max_doc_len, 1))
+                sen_bkg[i] = tf.tile(sen_bkg[i][:, None, :], (1, max_doc_len, 1))
                 sen_bkg[i] = tf.reshape(sen_bkg[i], (-1, self.hidden_size))
             for ihop in range(self.sen_hop_cnt):
                 attention_args['i'] = sen_bkg
@@ -219,13 +260,13 @@ class DNSC(object):
                 sen_bkg = hop('hop' + str(ihop), ihop == self.sen_hop_cnt - 1, lstm_outputs,
                               sentence_shape, attention_shape, sen_bkg,
                               hop_args, attention_args, convert_flag)
-        outputs = [tf.reshape(bkg, [-1, self.max_doc_len, self.hidden_size])
+        outputs = [tf.reshape(bkg, [-1, max_doc_len, self.hidden_size])
                    for bkg in sen_bkg]
         outputs = sum(outputs)
 
         with tf.variable_scope('document_layer'):
-            hop_args, attention_args = create_args(identity, self.doc_len, self.max_doc_len)
-            lstm_outputs, _state = lstm(outputs, self.doc_len, self.hidden_size, 'lstm')
+            hop_args, attention_args = create_args(identity, doc_len, max_doc_len)
+            lstm_outputs, _state = lstm(outputs, doc_len, self.hidden_size, 'lstm')
             # convert_w = [self.weights['doc_convert_wu'], self.weights['doc_convert_wp']]
             # convert_b = [self.biases['doc_convert_bu'], self.biases['doc_convert_bp']]
 
@@ -245,16 +286,14 @@ class DNSC(object):
         # get the inputs
         with tf.variable_scope('inputs'):
             input_map = data_iter.get_next()
-            usrid, prdid, input_x, input_y, self.doc_len, self.sen_len = \
-                (input_map['usr'], input_map['prd'], input_map['content'],
-                 input_map['rating'], input_map['doc_len'], input_map['sen_len'])
+            usrid, prdid, input_x, input_y = (input_map['usr'], input_map['prd'],
+                                              input_map['content'], input_map['rating'])
 
-            x = lookup(self.embeddings['wrd_emb'], input_x, name='cur_wrd_embedding')
             usr = lookup(self.embeddings['usr_emb'], usrid, name='cur_usr_embedding')
             prd = lookup(self.embeddings['prd_emb'], prdid, name='cur_prd_embedding')
 
         # build the process of model
-        d_hat, d_hatu, d_hatp = self.dhuapa(x, usr, prd, self.convert_flag)
+        d_hat, d_hatu, d_hatp = self.mdhuapa(input_x, usr, prd, self.convert_flag)
         prediction = tf.argmax(d_hat, 1, name='predictions')
 
         with tf.variable_scope("loss"):
@@ -304,8 +343,10 @@ class DNSC(object):
 
     def train(self, optimizer, global_step):
         grads_and_vars = optimizer.compute_gradients(self.loss)
-        # for g, v in grads_and_vars:
-        #     if v is self.weights['']:
-        #         pass
+        # if self.debug:
+        #     ipdb.set_trace()
+        #     for g, v in grads_and_vars:
+        #         tf.summary.histogram('grad', g.values)
+
         train_op = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
         return train_op

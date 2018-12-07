@@ -1,4 +1,3 @@
-import ipdb
 # -*- coding: utf-8 -*-
 # author: Xue Qianming
 import os
@@ -12,11 +11,15 @@ from dnsc import DNSC
 from dnsc2 import DNSC2
 from dlstm import DLSTM
 from mlstm import MLSTM
+from mdhuapa import MDHUAPA
+from mldhuapa import MLDHUAPA
 from colored import fg, stylize
 import dnsc
 import dnsc2
 import dlstm
 import mlstm
+import mdhuapa
+import mldhuapa
 import math
 
 
@@ -129,6 +132,12 @@ with tf.Graph().as_default():
         if flags.model == 'mlstm':
             model = MLSTM(model_params)
             cur_model = mlstm
+        if flags.model == 'mdhuapa':
+            model = MDHUAPA(model_params)
+            cur_model = mdhuapa
+        if flags.model == 'mldhuapa':
+            model = MLDHUAPA(model_params)
+            cur_model = mldhuapa
 
         data_iter = tf.data.Iterator.from_structure(trainset.output_types,
                                                     output_shapes=trainset.output_shapes)
@@ -178,6 +187,8 @@ with tf.Graph().as_default():
                 # train on transet
                 # trainlen = flags.batch_size * flags.evaluate_every
                 # when debugging, summary info is needed for tensorboard
+                # cur_trainlen = trainlen if model.best_test_acc < 0.530 \
+                #     else flags.evaluate_every * flags.batch_size
                 if flags.debug:
                     train_metrics, step, train_summary, _ = \
                         run_set(sess, trainlen, metrics, (global_step, summary, train_op))
@@ -192,6 +203,7 @@ with tf.Graph().as_default():
                 if flags.debug:
                     for i, s in zip(step, train_summary):
                         train_writer.add_summary(s, i)
+                        train_writer.flush()
 
                 # test on devset
                 sess.run(devinit)

@@ -1,0 +1,158 @@
+2018-12-06 21:45:18.461007: I tensorflow/core/platform/cpu_feature_guard.cc:140] Your CPU supports instructions that this TensorFlow binary was not compiled to use: SSE4.1 SSE4.2 AVX AVX2 FMA
+2018-12-06 21:45:18.891709: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1356] Found device 0 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:02:00.0
+totalMemory: 10.91GiB freeMemory: 4.77GiB
+2018-12-06 21:45:19.328523: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1356] Found device 1 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:03:00.0
+totalMemory: 10.91GiB freeMemory: 2.36GiB
+2018-12-06 21:45:19.750239: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1356] Found device 2 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:83:00.0
+totalMemory: 10.91GiB freeMemory: 10.75GiB
+2018-12-06 21:45:20.279857: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1356] Found device 3 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:84:00.0
+totalMemory: 10.91GiB freeMemory: 10.75GiB
+2018-12-06 21:45:20.288532: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1435] Adding visible gpu devices: 0, 1, 2, 3
+2018-12-06 21:45:22.140048: I tensorflow/core/common_runtime/gpu/gpu_device.cc:923] Device interconnect StreamExecutor with strength 1 edge matrix:
+2018-12-06 21:45:22.140105: I tensorflow/core/common_runtime/gpu/gpu_device.cc:929]      0 1 2 3 
+2018-12-06 21:45:22.140116: I tensorflow/core/common_runtime/gpu/gpu_device.cc:942] 0:   N Y N N 
+2018-12-06 21:45:22.140123: I tensorflow/core/common_runtime/gpu/gpu_device.cc:942] 1:   Y N N N 
+2018-12-06 21:45:22.140129: I tensorflow/core/common_runtime/gpu/gpu_device.cc:942] 2:   N N N Y 
+2018-12-06 21:45:22.140135: I tensorflow/core/common_runtime/gpu/gpu_device.cc:942] 3:   N N Y N 
+TensorBoard 1.8.0 at http://AIDA1080Ti:8288 (Press CTRL+C to quit)
+W1206 21:45:23.144533 Thread-2 application.py:274] path /[[_dataImageSrc]] not found, sending 404
+W1206 21:45:23.655220 Reloader plugin_event_accumulator.py:300] Found more than one graph event per run, or there was a metagraph containing a graph_def, as well as one or more graph events.  Overwriting the graph with the newest event.
+W1206 21:45:23.700370 Thread-2 application.py:274] path /[[_imageURL]] not found, sending 404
+W1206 21:45:24.168987 Reloader plugin_event_accumulator.py:308] Found more than one metagraph event per run. Overwriting the metagraph with the newest event.
+W1206 21:45:24.676713 Reloader plugin_event_accumulator.py:300] Found more than one graph event per run, or there was a metagraph containing a graph_def, as well as one or more graph events.  Overwriting the graph with the newest event.
+W1206 21:45:25.207133 Reloader plugin_event_accumulator.py:308] Found more than one metagraph event per run. Overwriting the metagraph with the newest event.
+W1206 21:50:25.068904 Thread-2 application.py:274] path /[[_dataImageSrc]] not found, sending 404
+W1206 21:50:25.696123 Thread-4 application.py:274] path /[[_imageURL]] not found, sending 404
+W1206 21:50:33.751629 Thread-2 application.py:274] path /[[_dataImageSrc]] not found, sending 404
+W1206 21:50:34.242972 Thread-4 application.py:274] path /[[_imageURL]] not found, sending 404
+2018-12-06 21:50:42.441947: I tensorflow/core/platform/cpu_feature_guard.cc:140] Your CPU supports instructions that this TensorFlow binary was not compiled to use: SSE4.1 SSE4.2 AVX AVX2 FMA
+2018-12-06 21:50:42.913816: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1356] Found device 0 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:02:00.0
+totalMemory: 10.91GiB freeMemory: 4.77GiB
+2018-12-06 21:50:43.323877: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1356] Found device 1 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:03:00.0
+totalMemory: 10.91GiB freeMemory: 2.36GiB
+2018-12-06 21:50:43.934134: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1356] Found device 2 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:83:00.0
+totalMemory: 10.91GiB freeMemory: 10.75GiB
+2018-12-06 21:50:44.334686: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1356] Found device 3 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:84:00.0
+totalMemory: 10.91GiB freeMemory: 10.75GiB
+2018-12-06 21:50:44.337402: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1435] Adding visible gpu devices: 0, 1, 2, 3
+2018-12-06 21:50:45.885466: I tensorflow/core/common_runtime/gpu/gpu_device.cc:923] Device interconnect StreamExecutor with strength 1 edge matrix:
+2018-12-06 21:50:45.885527: I tensorflow/core/common_runtime/gpu/gpu_device.cc:929]      0 1 2 3 
+2018-12-06 21:50:45.885543: I tensorflow/core/common_runtime/gpu/gpu_device.cc:942] 0:   N Y N N 
+2018-12-06 21:50:45.885554: I tensorflow/core/common_runtime/gpu/gpu_device.cc:942] 1:   Y N N N 
+2018-12-06 21:50:45.885564: I tensorflow/core/common_runtime/gpu/gpu_device.cc:942] 2:   N N N Y 
+2018-12-06 21:50:45.885574: I tensorflow/core/common_runtime/gpu/gpu_device.cc:942] 3:   N N Y N 
+W1206 21:50:46.747762 Reloader plugin_event_accumulator.py:300] Found more than one graph event per run, or there was a metagraph containing a graph_def, as well as one or more graph events.  Overwriting the graph with the newest event.
+W1206 21:50:47.050565 Reloader plugin_event_accumulator.py:308] Found more than one metagraph event per run. Overwriting the metagraph with the newest event.
+TensorBoard 1.8.0 at http://AIDA1080Ti:8288 (Press CTRL+C to quit)
+W1206 21:50:47.350534 Reloader plugin_event_accumulator.py:300] Found more than one graph event per run, or there was a metagraph containing a graph_def, as well as one or more graph events.  Overwriting the graph with the newest event.
+W1206 21:50:47.607863 Reloader plugin_event_accumulator.py:308] Found more than one metagraph event per run. Overwriting the metagraph with the newest event.
+W1206 21:50:48.178218 Thread-2 application.py:274] path /[[_dataImageSrc]] not found, sending 404
+W1206 21:50:48.581222 Thread-2 application.py:274] path /[[_imageURL]] not found, sending 404
+W1206 21:51:25.701321 Thread-2 application.py:274] path /[[_dataImageSrc]] not found, sending 404
+W1206 21:51:26.252762 Thread-2 application.py:274] path /[[_imageURL]] not found, sending 404
+W1206 21:51:37.112019 Thread-2 application.py:274] path /[[_dataImageSrc]] not found, sending 404
+W1206 21:51:37.621234 Thread-2 application.py:274] path /[[_imageURL]] not found, sending 404
+W1206 21:54:04.543047 Thread-4 application.py:274] path /[[_dataImageSrc]] not found, sending 404
+W1206 21:54:05.111020 Thread-2 application.py:274] path /[[_imageURL]] not found, sending 404
+W1206 22:00:10.782125 Thread-2 application.py:274] path /[[_dataImageSrc]] not found, sending 404
+W1206 22:00:11.638332 Thread-2 application.py:274] path /[[_imageURL]] not found, sending 404
+2018-12-06 22:00:21.145992: I tensorflow/core/platform/cpu_feature_guard.cc:140] Your CPU supports instructions that this TensorFlow binary was not compiled to use: SSE4.1 SSE4.2 AVX AVX2 FMA
+2018-12-06 22:00:21.808590: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1356] Found device 0 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:02:00.0
+totalMemory: 10.91GiB freeMemory: 4.77GiB
+2018-12-06 22:00:22.166724: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1356] Found device 1 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:03:00.0
+totalMemory: 10.91GiB freeMemory: 2.36GiB
+2018-12-06 22:00:22.632951: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1356] Found device 2 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:83:00.0
+totalMemory: 10.91GiB freeMemory: 10.75GiB
+2018-12-06 22:00:23.303425: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1356] Found device 3 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:84:00.0
+totalMemory: 10.91GiB freeMemory: 10.75GiB
+2018-12-06 22:00:23.306127: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1435] Adding visible gpu devices: 0, 1, 2, 3
+2018-12-06 22:00:25.055470: I tensorflow/core/common_runtime/gpu/gpu_device.cc:923] Device interconnect StreamExecutor with strength 1 edge matrix:
+2018-12-06 22:00:25.055539: I tensorflow/core/common_runtime/gpu/gpu_device.cc:929]      0 1 2 3 
+2018-12-06 22:00:25.055635: I tensorflow/core/common_runtime/gpu/gpu_device.cc:942] 0:   N Y N N 
+2018-12-06 22:00:25.055647: I tensorflow/core/common_runtime/gpu/gpu_device.cc:942] 1:   Y N N N 
+2018-12-06 22:00:25.055657: I tensorflow/core/common_runtime/gpu/gpu_device.cc:942] 2:   N N N Y 
+2018-12-06 22:00:25.055666: I tensorflow/core/common_runtime/gpu/gpu_device.cc:942] 3:   N N Y N 
+W1206 22:00:25.871687 Reloader plugin_event_accumulator.py:300] Found more than one graph event per run, or there was a metagraph containing a graph_def, as well as one or more graph events.  Overwriting the graph with the newest event.
+W1206 22:00:26.174781 Reloader plugin_event_accumulator.py:308] Found more than one metagraph event per run. Overwriting the metagraph with the newest event.
+TensorBoard 1.8.0 at http://AIDA1080Ti:8288 (Press CTRL+C to quit)
+W1206 22:00:26.478716 Reloader plugin_event_accumulator.py:300] Found more than one graph event per run, or there was a metagraph containing a graph_def, as well as one or more graph events.  Overwriting the graph with the newest event.
+W1206 22:00:26.746553 Reloader plugin_event_accumulator.py:308] Found more than one metagraph event per run. Overwriting the metagraph with the newest event.
+W1206 22:00:26.977010 Thread-2 application.py:274] path /[[_dataImageSrc]] not found, sending 404
+W1206 22:00:27.648765 Thread-2 application.py:274] path /[[_imageURL]] not found, sending 404
+2018-12-06 22:00:55.763976: I tensorflow/core/platform/cpu_feature_guard.cc:140] Your CPU supports instructions that this TensorFlow binary was not compiled to use: SSE4.1 SSE4.2 AVX AVX2 FMA
+2018-12-06 22:00:56.095014: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1356] Found device 0 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:02:00.0
+totalMemory: 10.91GiB freeMemory: 4.77GiB
+2018-12-06 22:00:56.516156: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1356] Found device 1 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:03:00.0
+totalMemory: 10.91GiB freeMemory: 2.36GiB
+2018-12-06 22:00:57.225903: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1356] Found device 2 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:83:00.0
+totalMemory: 10.91GiB freeMemory: 10.75GiB
+2018-12-06 22:00:57.754404: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1356] Found device 3 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:84:00.0
+totalMemory: 10.91GiB freeMemory: 10.75GiB
+2018-12-06 22:00:57.758990: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1435] Adding visible gpu devices: 0, 1, 2, 3
+2018-12-06 22:00:59.592001: I tensorflow/core/common_runtime/gpu/gpu_device.cc:923] Device interconnect StreamExecutor with strength 1 edge matrix:
+2018-12-06 22:00:59.592055: I tensorflow/core/common_runtime/gpu/gpu_device.cc:929]      0 1 2 3 
+2018-12-06 22:00:59.592067: I tensorflow/core/common_runtime/gpu/gpu_device.cc:942] 0:   N Y N N 
+2018-12-06 22:00:59.592075: I tensorflow/core/common_runtime/gpu/gpu_device.cc:942] 1:   Y N N N 
+2018-12-06 22:00:59.592082: I tensorflow/core/common_runtime/gpu/gpu_device.cc:942] 2:   N N N Y 
+2018-12-06 22:00:59.592090: I tensorflow/core/common_runtime/gpu/gpu_device.cc:942] 3:   N N Y N 
+TensorBoard 1.8.0 at http://AIDA1080Ti:8288 (Press CTRL+C to quit)
+W1206 22:01:00.433424 Thread-2 application.py:274] path /[[_dataImageSrc]] not found, sending 404
+W1206 22:01:00.987528 Thread-2 application.py:274] path /[[_dataImageSrc]] not found, sending 404
+W1206 22:01:01.660577 Thread-2 application.py:274] path /[[_dataImageSrc]] not found, sending 404
+W1206 22:01:02.237936 Thread-2 application.py:274] path /[[_imageURL]] not found, sending 404
+Traceback (most recent call last):
+  File "/home/qmxue/anaconda3/envs/py2/bin/tensorboard", line 7, in <module>
+    from tensorboard.main import run_main
+  File "/home/qmxue/anaconda3/envs/py2/lib/python2.7/site-packages/tensorboard/main.py", line 28, in <module>
+    import tensorflow as tf
+  File "/home/qmxue/anaconda3/envs/py2/lib/python2.7/site-packages/tensorflow/__init__.py", line 24, in <module>
+    from tensorflow.python import pywrap_tensorflow  # pylint: disable=unused-import
+  File "/home/qmxue/anaconda3/envs/py2/lib/python2.7/site-packages/tensorflow/python/__init__.py", line 82, in <module>
+    from tensorflow.python.estimator import estimator_lib as estimator
+  File "/home/qmxue/anaconda3/envs/py2/lib/python2.7/site-packages/tensorflow/python/estimator/estimator_lib.py", line 41, in <module>
+    from tensorflow.python.estimator.inputs import inputs
+  File "/home/qmxue/anaconda3/envs/py2/lib/python2.7/site-packages/tensorflow/python/estimator/inputs/inputs.py", line 22, in <module>
+    from tensorflow.python.estimator.inputs.numpy_io import numpy_input_fn
+  File "/home/qmxue/anaconda3/envs/py2/lib/python2.7/site-packages/tensorflow/python/estimator/inputs/numpy_io.py", line 26, in <module>
+    from tensorflow.python.estimator.inputs.queues import feeding_functions
+  File "/home/qmxue/anaconda3/envs/py2/lib/python2.7/site-packages/tensorflow/python/estimator/inputs/queues/feeding_functions.py", line 40, in <module>
+    import pandas as pd
+  File "/home/qmxue/anaconda3/envs/py2/lib/python2.7/site-packages/pandas/__init__.py", line 57, in <module>
+    from pandas.io.api import *
+  File "/home/qmxue/anaconda3/envs/py2/lib/python2.7/site-packages/pandas/io/api.py", line 17, in <module>
+    from pandas.io.stata import read_stata
+  File "/home/qmxue/anaconda3/envs/py2/lib/python2.7/site-packages/pandas/io/stata.py", line 11, in <module>
+    """
+KeyboardInterrupt

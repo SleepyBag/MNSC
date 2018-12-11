@@ -2,5 +2,6 @@ __pycache__
 *.pyc
 data/
 checkpoints/
+check_points/
 summary/
 code_history/

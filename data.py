@@ -10,10 +10,11 @@ emb_col_name = ['wrd'] + [i for i in range(200)]
 
 
 def build_dataset(filenames, embedding_filename, max_doc_len, max_sen_len, hierarchy):
-    wrd_index, embedding = load_embedding(embedding_filename)
+    wrd_dict, wrd_index, embedding = load_embedding(embedding_filename)
     # read the data and transform them
     data_frames, usr_cnt, prd_cnt = read_files(filenames, wrd_index, max_doc_len,
                                                max_sen_len, hierarchy)
+    print('usr_cnt: %d, prd_cnt: %d' % (usr_cnt, prd_cnt))
 
     datasets = []
     lengths = []
@@ -26,16 +27,16 @@ def build_dataset(filenames, embedding_filename, max_doc_len, max_sen_len, hiera
         datasets.append(dataset)
         lengths.append(len(data_frame))
 
-    return datasets, lengths, embedding.values, usr_cnt, prd_cnt
+    return datasets, lengths, embedding.values, usr_cnt, prd_cnt, wrd_dict
 
 
 # load an embedding file
 def load_embedding(filename):
     data_frame = pd.read_csv(filename, sep=' ', header=0, names=emb_col_name)
     embedding = data_frame[emb_col_name[1:]]
-    wrd = data_frame['wrd'].tolist()
-    wrd_index = {s: i for i, s in enumerate(wrd)}
-    return wrd_index, embedding
+    wrd_dict = data_frame['wrd'].tolist()
+    wrd_index = {s: i for i, s in enumerate(wrd_dict)}
+    return wrd_dict, wrd_index, embedding
 
 
 # transform a sentence into indices

@@ -1,3 +1,4 @@
+import ipdb
 # -*- coding: utf-8 -*-
 # author: Xue Qianming
 import os
@@ -21,6 +22,7 @@ import mlstm
 import mdhuapa
 import mldhuapa
 import math
+from tensorflow.python import debug as tf_debug
 
 
 # delete all flags that remained by last run
@@ -39,7 +41,9 @@ except:
 
 params = {
     'debug_params': [('debug', False, 'Whether to debug or not'),
-                     ('check', False, 'Whether to make a checkpoint')],
+                     ('check', False, 'Whether to make a checkpoint'),
+                     ('checkpoint', '4725', 'checkpoint file'),
+                     ('tfdbg', 'null', 'the manner to debug(cli or tensorboard)')],
     'data_params': [('cls_cnt', 10, "Numbers of class"),
                     ('dataset', 'test', "The dataset")],
     'model_chooing': [('model', 'dnsc', 'Model to train')],
@@ -49,15 +53,15 @@ params = {
                          ('max_doc_len', 40, 'max number of tokens per sentence'),
                          ("lr", .001, "Learning rate"),
                          ("l2_rate", .001, "rate of l2 regularization"),
-                         ("lambda1", .4, "proportion of the total loss"),
-                         ("lambda2", .3, "proportion of the loss of user block"),
-                         ("lambda3", .3, "proportion of the loss of product block"),
+                         ("lambda1", .4, "rate of l2 regularization"),
+                         ("lambda2", .3, "rate of l2 regularization"),
+                         ("lambda3", .3, "rate of l2 regularization"),
                          ("bilstm", True, "use biLSTM or LSTM"),
                          ("sen_hop_cnt", 1, "number of hops in sentence layer"),
                          ("doc_hop_cnt", 1, "number of hops in document layer"),
-                         ("convert_flag", 'o', "params used in background converting process")],
-    'training_params': [("batch_size", 100, "Batch Size"),
-                        ("epoch_cnt", 50, "Number of training epochs"),
+                         ("convert_flag", 'obw', "params used in background converting process")],
+    'training_params': [("batch_size", 1, "Batch Size"),
+                        ("epoch_cnt", 1000, "Number of training epochs"),
                         ("evaluate_every", 200, "Evaluate model on dev set after this many steps"),
                         ("training_method", 'adam', 'Method chose to tune the weights')],
     'misc_params': [("allow_soft_placement", True, "Allow device soft device placement"),
@@ -86,16 +90,14 @@ localtime = time.localtime(cur_time)
 
 _ = flags.batch_size
 # print params
-output_file = open('code_history/' + str(cur_time) + '/output.txt', 'a')
 print("\nParameters:")
 for attr, value in sorted(flags.__flags.items()):
     print("{}={}".format(attr.upper(), value.value))
-    print >> output_file, "{}={}".format(attr.upper(), value.value)
 print("")
-output_file.close()
 
 
-with tf.Graph().as_default():
+graph = tf.Graph()
+with graph.as_default():
     # Load data
     print("Loading data...")
     datasets = ['data/' + flags.dataset + s for s in ['/train.ss', '/dev.ss', '/test.ss']]
@@ -106,7 +108,7 @@ with tf.Graph().as_default():
                            flags.max_sen_len, hierarchy)
     trainset, devset, testset = datasets
     trainlen, devlen, testlen = lengths
-    trainset = trainset.shuffle(100000).batch(flags.batch_size)
+    trainset = trainset.batch(flags.batch_size)
     devset = devset.batch(flags.batch_size)
     testset = testset.batch(flags.batch_size)
     print("Loading data finished...")
@@ -118,13 +120,11 @@ with tf.Graph().as_default():
     )
     session_config.gpu_options.allow_growth = True
     sess = tf.Session(config=session_config)
+    if flags.tfdbg == 'cli':
+        sess = tf_debug.LocalCLIDebugWrapperSession(sess)
 
     with sess.as_default():
         # build the model
-        # model_params = flags.__flags
-        # model_params['embedding'] = embedding
-        # model_params['usr_cnt'] = usr_cnt
-        # model_params['prd_cnt'] = prd_cnt
         model_params = {
             'max_sen_len': flags.max_sen_len, 'max_doc_len': flags.max_doc_len,
             'cls_cnt': flags.cls_cnt, 'embedding': embedding,
@@ -162,37 +162,51 @@ with tf.Graph().as_default():
 
         metrics = model.build(data_iter)
 
-        # Define Training procedure
+        # restore the params
+        saver = tf.train.Saver()
+        saver.restore(sess, 'check_points/-' + flags.checkpoint)
+
+        wrd = 'divide0/fold/cur_wrd:0'
+        usr_attention = []
+        prd_attention = []
+        for i in range(flags.sen_hop_cnt):
+            usr_attention.append('divide0/user_block/sentence_layer/hop' + str(i) +
+                                 '/attention/attention_without_null_word:0')
+            prd_attention.append('divide0/product_block/sentence_layer/hop' + str(i) +
+                                 '/attention/attention_without_null_word:0')
+        usr_doc_att = 'divide0/user_block/document_layer/hop0/attention/attention_without_null_word:0'
+        prd_doc_att = 'divide0/product_block/document_layer/hop0/attention/attention_without_null_word:0'
+
         global_step = tf.Variable(0, name="global_step", trainable=False)
-        if flags.training_method == 'sgd':
-            optimizer = tf.train.GradientDescentOptimizer(flags.lr)
-        elif flags.training_method == 'adam':
-            optimizer = tf.train.AdamOptimizer(flags.lr)
-        elif flags.training_method == 'adadelta':
-            optimizer = tf.train.AdadeltaOptimizer(flags.lr, epsilon=1e-6)
-        train_op = model.train(optimizer, global_step)
-
-        # merge tensorboard summary
-        if flags.debug:
-            summary = tf.summary.merge_all()
-            train_writer = tf.summary.FileWriter('summary/train', sess.graph)
-            # dev_writer = tf.summary.FileWriter('summary/dev', sess.graph)
-            # test_writer = tf.summary.FileWriter('summary/test', sess.graph)
-
-        sess.run(tf.global_variables_initializer())
-
-        if flags.check:
-            saver = tf.train.Saver(tf.global_variables(), max_to_keep=1000)
-
         # run a dataset
+
         def run_set(sess, testlen, metrics, ops=tuple()):
+            ops = tuple(ops)
             global flags
-            pgb = tqdm(range(int(math.ceil(float(testlen) / flags.batch_size))),
-                       leave=False, ncols=50)
             metrics_total = [0] * len(metrics)
             op_results = [[] for i in ops]
-            for i in pgb:
+            ipdb.set_trace()
+            for i in range(int(math.ceil(float(testlen) / flags.batch_size))):
                 cur_metrics = sess.run(metrics + ops)
+                if flags.tfdbg == 'null':
+                    sen_hop_cnt = flags.sen_hop_cnt
+                    cur_usr_doc_att = np.transpose(cur_metrics[-2 * sen_hop_cnt - 3], [2, 1, 0])
+                    cur_prd_doc_att = np.transpose(cur_metrics[-2 * sen_hop_cnt - 2], [2, 1, 0])
+                    cur_wrd = cur_metrics[-2 * sen_hop_cnt - 1].flatten()
+                    cur_wrd = [wrd_dict[i] for i in cur_wrd]
+                    for i, color in zip(range(sen_hop_cnt), ['red', 'green', 'yellow']):
+                        cur_usr_att = (cur_usr_doc_att * cur_metrics[-2 * sen_hop_cnt + i]).flatten()
+                        cur_prd_att = (cur_prd_doc_att * cur_metrics[-1 * sen_hop_cnt + i]).flatten()
+                        print fg(color), cur_wrd[np.argmax(cur_usr_att)], np.max(cur_usr_att), np.argmax(cur_usr_att), '\t',\
+                            cur_wrd[np.argmax(cur_prd_att)], np.max(cur_prd_att), np.argmax(cur_prd_att)
+                    for i in range(4 - sen_hop_cnt):
+                        print('-' * 50)
+                    # cur_usr_att0 = (cur_usr_doc_att * cur_metrics[-4]).flatten()
+                    # cur_usr_att1 = (cur_usr_doc_att * cur_metrics[-3]).flatten()
+                    # cur_prd_att0 = (cur_prd_doc_att * cur_metrics[-2]).flatten()
+                    # cur_prd_att1 = (cur_prd_doc_att * cur_metrics[-1]).flatten()
+                    # print fg('green'), cur_wrd[np.argmax(cur_usr_att1)], np.max(cur_usr_att1), np.argmax(cur_usr_att1), '\t',\
+                    #     cur_wrd[np.argmax(cur_prd_att1)], np.max(cur_prd_att1), np.argmax(cur_prd_att1)
                 for j in range(len(metrics)):
                     metrics_total[j] += cur_metrics[j]
                 for j in range(len(ops)):
@@ -204,25 +218,15 @@ with tf.Graph().as_default():
                 sess.run(traininit)
                 output_file = open('code_history/' + str(cur_time) + '/output.txt', 'a')
                 # train on trainset
-                # trainlen = flags.batch_size * flags.evaluate_every
-                # when debugging, summary info is needed for tensorboard
-                # cur_trainlen = trainlen if model.best_test_acc < 0.530 \
-                #     else flags.evaluate_every * flags.batch_size
-                if flags.debug:
-                    train_metrics, step, train_summary, _ = \
-                        run_set(sess, trainlen, metrics, (global_step, summary, train_op))
-                else:
-                    train_metrics, step, _ = \
-                        run_set(sess, trainlen, metrics, (global_step, train_op, ))
+                ops = [usr_doc_att, prd_doc_att, wrd]
+                ops += usr_attention
+                ops += prd_attention
+                train_metrics, step, cur_wrd, cur_attention0, cur_attention1 = \
+                    run_set(sess, trainlen, metrics, ops)
                 info = model.output_metrics(train_metrics, trainlen)
                 info = 'Trainset:' + info
                 print(stylize(info, fg('yellow')))
                 print >> output_file, info
-
-                if flags.debug:
-                    for i, s in zip(step, train_summary):
-                        train_writer.add_summary(s, i)
-                        train_writer.flush()
 
                 # test on devset
                 sess.run(devinit)
@@ -245,13 +249,6 @@ with tf.Graph().as_default():
                 info = 'Epoch %d finished, ' % epoch + info
                 print(stylize(info, fg('white')))
                 print >> output_file, info
-
-                # write a checkpoint
-                if flags.check and 'NEW' in info:
-                    save_path = saver.save(sess, 'check_points/', global_step=step[-1])
-                    print('Checkpoint saved to ' + save_path)
-
-                output_file.close()
 
         except KeyboardInterrupt:
             print('Interrupted')

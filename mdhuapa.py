@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow import constant as const
 from colored import stylize, fg
+from math import sqrt
 import numpy as np
 lookup = tf.nn.embedding_lookup
 
@@ -12,7 +13,6 @@ def var(name, shape, initializer):
 class MDHUAPA(object):
 
     def __init__(self, args):
-        self.max_sen_len = args['max_sen_len']
         self.max_doc_len = args['max_doc_len']
         self.cls_cnt = args['cls_cnt']
         self.embedding = args['embedding']
@@ -34,6 +34,7 @@ class MDHUAPA(object):
 
         self.best_dev_acc = .0
         self.best_test_acc = .0
+        self.best_test_rmse = .0
 
         # initializers for parameters
         self.weights_initializer = tf.contrib.layers.xavier_initializer()
@@ -59,22 +60,23 @@ class MDHUAPA(object):
     def fold(self, x, sen_len):
         with tf.variable_scope('fold'):
             # !!!
-            x = tf.reshape(x, [-1, self.max_sen_len // sen_len, sen_len], name='cur_wrd')
+            x = tf.reshape(x, [-1, self.max_doc_len // sen_len, sen_len], name='cur_wrd')
             # aug_x = tf.manip.roll(x, shift=-1, axis=1)
             # x = tf.concat([x, aug_x], axis=2, name='cur_wrd')
-            # sen_len = tf.argmin(x, axis=2)
             sen_len = tf.reduce_sum(1 - tf.cast(tf.equal(x, 0), tf.int32), axis=2)
+            # document length substracts 1 because the last sentence is led by zeors,
+            # which may cause problems
             doc_len = tf.reduce_sum(1 - tf.cast(tf.equal(sen_len, 0), tf.int32), axis=1)
             x = lookup(self.embeddings['wrd_emb'], x, name='cur_wrd_embedding')
         return x, sen_len, doc_len
 
     def mdhuapa(self, x, usr, prd, convert_flag):
-        # !!! 
+        # !!!
         folds = [30]
         logitsu, logitsp = [], []
         for i, max_sen_len in enumerate(folds):
             with tf.variable_scope('divide' + str(i)):
-                max_doc_len = self.max_sen_len // max_sen_len
+                max_doc_len = self.max_doc_len // max_sen_len
                 logitu, logitp = self.dhuapa(x, max_sen_len, max_doc_len, usr, prd, convert_flag)
                 logitsu.append(logitu)
                 logitsp.append(logitp)
@@ -102,20 +104,22 @@ class MDHUAPA(object):
         return d_hat, d_hatu, d_hatp
 
     def dhuapa(self, x, max_sen_len, max_doc_len, usr, prd, convert_flag):
-        # self.inputs = tf.reshape(x, [-1, self.max_sen_len, self.emb_dim])
+        # self.inputs = tf.reshape(x, [-1, self.max_doc_len, self.emb_dim])
         # self.sen_len = tf.reshape(self.sen_len, [-1])
         x, sen_len, doc_len = self.fold(x, max_sen_len)
+        # !!!
         # max_sen_len *= 2
 
         outputs = []
-        for scope, identity in zip(['user_block', 'product_block'], [usr, prd]):
+        for scope, identities in zip(['user_block', 'product_block'],
+                                     [[usr, prd], [prd, usr]]):
             with tf.variable_scope(scope):
                 outputs.append(self.dnsc(x, max_sen_len, max_doc_len, sen_len, doc_len,
-                                         identity, convert_flag))
+                                         identities, convert_flag))
 
         return outputs[0], outputs[1]
 
-    def dnsc(self, x, max_sen_len, max_doc_len, sen_len, doc_len, identity, convert_flag):
+    def dnsc(self, x, max_sen_len, max_doc_len, sen_len, doc_len, identities, convert_flag):
         x = tf.reshape(x, [-1, max_sen_len, self.hidden_size])
         sen_len = tf.reshape(sen_len, [-1])
 
@@ -171,34 +175,34 @@ class MDHUAPA(object):
                     if not last else sentence_bkg
                 attention_args['h'] = sentence
                 alphas = attention(**attention_args)
-                for i, alpha in enumerate(alphas):
-                    new_background[i] = tf.matmul(alpha, sentence_bkg)
-                    # new_background[i] = tf.matmul(alpha, sentence_bkg) \
-                    #     if not last else tf.matmul(alpha, sentence)
-                    new_background[i] = tf.reshape(new_background[i], [-1, self.hidden_size],
-                                                   name='new_background' + str(i))
-                    # if not last:
-                    if 'w' in convert_flag:
-                        background[i] = tf.matmul(background[i], hop_args['convert_w'][i])
-                    if 'b' in convert_flag:
-                        background[i] += hop_args['convert_b']
-                    if 'a' in convert_flag:
-                        background[i] = tf.tanh(background[i])
-                    if 'z' in convert_flag:
-                        z = tf.matmul(background[i], hop_args['wz_old']) + \
-                            tf.matmul(new_background[i], hop_args['wz_new']) + \
-                            hop_args['zb']
-                        z = tf.nn.sigmoid(z)
-                        new_background[i] = z * background[i] + (1 - z) * new_background[i]
-                    if 'o' in convert_flag:
-                        new_background[i] = background[i] + new_background[i]
+                # for i, alpha in enumerate(alphas):
+                new_background[0] = tf.matmul(alphas[0], sentence_bkg)
+                new_background[0] = tf.reshape(new_background[0], [-1, self.hidden_size],
+                                               name='new_background')
+                # if not last:
+                if 'w' in convert_flag:
+                    background[0] = tf.matmul(background[0], hop_args['convert_w'][0])
+                if 'b' in convert_flag:
+                    background[0] += hop_args['convert_b']
+                if 'a' in convert_flag:
+                    background[0] = tf.tanh(background[0])
+                if 'z' in convert_flag:
+                    z = tf.matmul(background[0], hop_args['wz_old']) + \
+                        tf.matmul(new_background[0], hop_args['wz_new']) + \
+                        hop_args['zb']
+                    z = tf.nn.sigmoid(z)
+                    new_background[0] = z * background[0] + (1 - z) * new_background[0]
+                if 'o' in convert_flag:
+                    new_background[0] = background[0] + new_background[0]
+                new_background[1:] = background[1:]
             return new_background
 
-        def create_args(identity, length, max_length, convert_flag):
+        def create_args(length, max_length, convert_flag):
             hop_args = {}
-            attention_args = {'i': [identity], 'doc_len': length, 'real_max_len': max_length}
+            attention_args = {'doc_len': length, 'real_max_len': max_length}
             attention_args['wh'] = var('wh', [self.hidden_size, self.hidden_size], self.weights_initializer)
-            attention_args['wi'] = [var('w', [self.hidden_size, self.hidden_size], self.weights_initializer)]
+            attention_args['wi'] = [var('w0', [self.hidden_size, self.hidden_size], self.weights_initializer),
+                                    var('w1', [self.hidden_size, self.hidden_size], self.weights_initializer)]
             attention_args['v'] = var('v', [self.hidden_size, 1], self.weights_initializer)
             if 'w' in convert_flag:
                 hop_args['convert_w'] = var('convert_w', [self.hidden_size, self.hidden_size], self.weights_initializer)
@@ -213,35 +217,35 @@ class MDHUAPA(object):
             return hop_args, attention_args
 
         with tf.variable_scope('sentence_layer'):
-            lstm_outputs, _state = lstm(x, sen_len, self.hidden_size, 'lstm')
-            lstm_outputs = tf.reshape(lstm_outputs, [-1, max_sen_len, self.hidden_size])
+            # lstm_outputs, _state = lstm(x, sen_len, self.hidden_size, 'lstm')
+            # lstm_outputs = tf.reshape(lstm_outputs, [-1, max_sen_len, self.hidden_size])
             lstm_bkg, _state = lstm(x, sen_len, self.hidden_size, 'lstm_bkg')
             lstm_bkg = tf.reshape(lstm_bkg, [-1, max_sen_len, self.hidden_size])
-            hop_args, attention_args = create_args(identity, sen_len, max_sen_len, convert_flag)
+            lstm_outputs = lstm_bkg
+            hop_args, attention_args = create_args(sen_len, max_sen_len, convert_flag)
 
-            sen_bkg = attention_args['i']
-            for i, _ in enumerate(sen_bkg):
-                sen_bkg[i] = tf.tile(sen_bkg[i][:, None, :], (1, max_doc_len, 1))
-                sen_bkg[i] = tf.reshape(sen_bkg[i], (-1, self.hidden_size))
+            sen_bkg = [tf.reshape(tf.tile(bkg[:, None, :], (1, max_doc_len, 1)),
+                                  (-1, self.hidden_size)) for bkg in identities]
             for ihop in range(self.sen_hop_cnt):
                 attention_args['i'] = sen_bkg
-                sen_bkg = hop('hop' + str(ihop), ihop == self.sen_hop_cnt - 1, lstm_outputs, lstm_bkg,
+                sen_bkg = hop('hop' + str(ihop), True, lstm_outputs, lstm_bkg,
                               sen_bkg, hop_args, attention_args, convert_flag)
-        outputs = [tf.reshape(bkg, [-1, max_doc_len, self.hidden_size])
-                   for bkg in sen_bkg]
-        outputs = sum(outputs)
+            outputs = tf.reshape(sen_bkg[0], [-1, max_doc_len, self.hidden_size])
+        # outputs = sum(outputs)
 
         with tf.variable_scope('document_layer'):
-            hop_args, attention_args = create_args(identity, doc_len, max_doc_len, convert_flag)
-            lstm_outputs, _state = lstm(outputs, doc_len, self.hidden_size, 'lstm')
+            hop_args, attention_args = create_args(doc_len, max_doc_len, convert_flag)
+            # lstm_outputs, _state = lstm(outputs, doc_len, self.hidden_size, 'lstm')
             lstm_bkg, _state = lstm(outputs, doc_len, self.hidden_size, 'lstm_bkg')
+            lstm_outputs = lstm_bkg
 
-            doc_bkg = attention_args['i']
+            doc_bkg = [i for i in identities]
             for ihop in range(self.doc_hop_cnt):
                 attention_args['i'] = doc_bkg
-                doc_bkg = hop('hop' + str(ihop), ihop == self.doc_hop_cnt - 1, lstm_outputs, lstm_bkg,
+                doc_bkg = hop('hop' + str(ihop), True, lstm_outputs, lstm_bkg,
                               doc_bkg, hop_args, attention_args, convert_flag)
-        outputs = tf.concat(values=doc_bkg, axis=1, name='outputs')
+        outputs = doc_bkg[0]
+        # outputs = tf.concat(values=doc_bkg[0], axis=1, name='outputs')
 
         return outputs
 
@@ -285,23 +289,25 @@ class MDHUAPA(object):
 
     def output_metrics(self, metrics, data_length):
         loss, mse, correct_num, accuracy = metrics
-        info = 'Loss = %.3f, MSE = %.3f, Acc = %.3f' % \
-            (loss / data_length, float(mse) / data_length, float(correct_num) / data_length)
+        info = 'Loss = %.3f, RMSE = %.3f, Acc = %.3f' % \
+            (loss / data_length, sqrt(float(mse) / data_length), float(correct_num) / data_length)
         return info
 
     def record_metrics(self, dev_metrics, test_metrics, devlen, testlen):
-        _dev_loss, _dev_mse, dev_correct_num, dev_accuracy = dev_metrics
-        _test_loss, _test_mse, test_correct_num, test_accuracy = test_metrics
+        _dev_loss, dev_mse, dev_correct_num, dev_accuracy = dev_metrics
+        _test_loss, test_mse, test_correct_num, test_accuracy = test_metrics
         dev_accuracy = float(dev_correct_num) / devlen
         test_accuracy = float(test_correct_num) / testlen
+        test_rmse = sqrt(float(test_mse) / testlen)
         if dev_accuracy > self.best_dev_acc:
             self.best_dev_acc = dev_accuracy
             self.best_test_acc = test_accuracy
-            info = 'NEW best dev acc: %.3f, NEW best test acc: %.3f' % \
-                (self.best_dev_acc, self.best_test_acc)
+            self.best_test_rmse = test_rmse
+            info = 'NEW best dev acc: %.3f, NEW best test acc: %.3f, NEW best test RMSE: %.3f' % \
+                (self.best_dev_acc, self.best_test_acc, self.best_test_rmse)
         else:
-            info = 'best dev acc: %.3f, best test acc: %.3f' % \
-                (self.best_dev_acc, self.best_test_acc)
+            info = 'best dev acc: %.3f, best test acc: %.3f, best test RMSE: %.3f' % \
+                (self.best_dev_acc, self.best_test_acc, self.best_test_rmse)
         return info
 
     def train(self, optimizer, global_step):

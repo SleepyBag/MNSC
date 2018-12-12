@@ -2,6 +2,7 @@ import pandas as pd
 import tensorflow as tf
 from functools import partial
 import numpy as np
+import os
 
 
 reading_col_name = ['usr', 'prd', 'rating', 'content']
@@ -9,23 +10,40 @@ output_col_name = ['usr', 'prd', 'rating', 'content', 'doc_len', 'sen_len']
 emb_col_name = ['wrd'] + [i for i in range(200)]
 
 
-def build_dataset(filenames, embedding_filename, max_doc_len, max_sen_len, hierarchy):
-    wrd_dict, wrd_index, embedding = load_embedding(embedding_filename)
-    # read the data and transform them
-    data_frames, usr_cnt, prd_cnt = read_files(filenames, wrd_index, max_doc_len,
-                                               max_sen_len, hierarchy)
-    print('usr_cnt: %d, prd_cnt: %d' % (usr_cnt, prd_cnt))
-
+def build_dataset(filenames, tfrecords_filenames, embedding_filename, max_doc_len, max_sen_len, hierarchy):
     datasets = []
     lengths = []
-    # build the dataset
-    for data_frame in data_frames:
-        data = {col: data_frame[col].values for col in output_col_name}
-        data['content'] = np.stack(data['content'])
-        data['sen_len'] = np.stack(data['sen_len'])
-        dataset = tf.data.Dataset.from_tensor_slices(data)
+    wrd_dict, wrd_index, embedding = load_embedding(embedding_filename)
+
+    if sum([os.path.exists(tfrecords_filename) for tfrecords_filename in tfrecords_filenames]) < len(tfrecords_filenames):
+        # read the data and transform them
+        data_frames, usr_cnt, prd_cnt = read_files(filenames, wrd_index, max_doc_len,
+                                                   max_sen_len, hierarchy)
+        print('usr_cnt: %d, prd_cnt: %d' % (usr_cnt, prd_cnt))
+
+        # build the dataset
+        for tfrecords_filename, data_frame in zip(tfrecords_filenames, data_frames):
+            data_frame['content'] = data_frame['content'].transform(lambda x: x.tostring())
+            # data = {col: data_frame[col].values for col in output_col_name}
+            # data['content'] = np.stack(data['content'])
+            # data['sen_len'] = np.stack(data['sen_len'])
+
+            writer = tf.python_io.TFRecordWriter(tfrecords_filename)
+            example = tf.train.Example(features=tf.train.Features(
+                feature={
+                    'usr': tf.train.Feature(int64_list=tf.train.Int64List(value=data_frame['usr'])),
+                    'prd': tf.train.Feature(int64_list=tf.train.Int64List(value=data_frame['prd'])),
+                    'rating': tf.train.Feature(int64_list=tf.train.Int64List(value=data_frame['rating'])),
+                    'content': tf.train.Feature(bytes_list=tf.train.BytesList(value=data_frame['content']))
+                }))
+            writer.write(example.SerializeToString())
+            writer.close()
+
+    for tfrecords_filename in tfrecords_filenames:
+        dataset = tf.data.TFRecordDataset(tfrecords_filename)
         datasets.append(dataset)
-        lengths.append(len(data_frame))
+        lengths.append(100)
+        # lengths.append(len(data_frame))
 
     return datasets, lengths, embedding.values, usr_cnt, prd_cnt, wrd_dict
 

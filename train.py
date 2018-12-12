@@ -99,10 +99,11 @@ with tf.Graph().as_default():
     # Load data
     print("Loading data...")
     datasets = ['data/' + flags.dataset + s for s in ['/train.ss', '/dev.ss', '/test.ss']]
+    tfrecords = ['data/' + flags.dataset + s for s in ['/train.tfrecord', '/dev.tfrecord', '/test.tfrecord']]
     embeddingpath = 'data/' + flags.dataset + '/embedding.txt'
     hierarchy = flags.model in ['dnsc']
     datasets, lengths, embedding, usr_cnt, prd_cnt, wrd_dict = \
-        data.build_dataset(datasets, embeddingpath, flags.max_doc_len,
+        data.build_dataset(datasets, tfrecords, embeddingpath, flags.max_doc_len,
                            flags.max_sen_len, hierarchy)
     trainset, devset, testset = datasets
     trainlen, devlen, testlen = lengths

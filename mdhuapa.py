@@ -87,7 +87,6 @@ class MDHUAPA(object):
         with tf.variable_scope('result'):
 
             softmax_w = var('softmax_w', [self.hidden_size * 2 * len(folds), self.cls_cnt], self.weights_initializer)
-            # softmax_wup = var('softmax_wup', [self.hidden_size * 2 * len(folds), self.cls_cnt], self.weights_initializer)
 
             softmax_wu = var('softmax_wu', [self.hidden_size * len(folds), self.cls_cnt], self.weights_initializer)
             softmax_wp = var('softmax_wp', [self.hidden_size * len(folds), self.cls_cnt], self.weights_initializer)

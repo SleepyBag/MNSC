@@ -100,14 +100,6 @@ class DNSC(object):
                 scope=scope
             )
             outputs = tf.concat(outputs, axis=2)
-            # outputs, state = tf.nn.dynamic_rnn(
-            #     cell=tf.nn.rnn_cell.LSTMCell(hidden_size, forget_bias=0.,
-            #                                  initializer=tf.contrib.layers.xavier_initializer()),
-            #     inputs=inputs,
-            #     sequence_length=sequence_length,
-            #     dtype=tf.float32,
-            #     scope=scope
-            # )
             return outputs, state
 
         def attention(v, wh, h, wi, i, b, doc_len, real_max_len):

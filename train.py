@@ -8,18 +8,12 @@ import tensorflow as tf
 from tqdm import tqdm
 import data
 from dnsc import DNSC
-from dnsc2 import DNSC2
-from dlstm import DLSTM
-from mlstm import MLSTM
+from dhuapa import DHUAPA
 from mdhuapa import MDHUAPA
-from mldhuapa import MLDHUAPA
 from colored import fg, stylize
 import dnsc
-import dnsc2
-import dlstm
-import mlstm
 import mdhuapa
-import mldhuapa
+import dhuapa
 import math
 
 
@@ -48,12 +42,12 @@ params = {
                          ('max_sen_len', 50, 'max number of tokens per sentence'),
                          ('max_doc_len', 40, 'max number of tokens per sentence'),
                          ("lr", .001, "Learning rate"),
-                         ("l2_rate", .001, "rate of l2 regularization"),
+                         ("l2_rate", 0, "rate of l2 regularization"),
                          ("lambda1", .4, "proportion of the total loss"),
                          ("lambda2", .3, "proportion of the loss of user block"),
                          ("lambda3", .3, "proportion of the loss of product block"),
                          ("bilstm", True, "use biLSTM or LSTM"),
-                         ("sen_hop_cnt", 1, "number of hops in sentence layer"),
+                         ("sen_hop_cnt", 3, "number of hops in sentence layer"),
                          ("doc_hop_cnt", 1, "number of hops in document layer"),
                          ("convert_flag", 'o', "params used in background converting process")],
     'training_params': [("batch_size", 100, "Batch Size"),
@@ -100,14 +94,15 @@ with tf.Graph().as_default():
     print("Loading data...")
     datasets = ['data/' + flags.dataset + s for s in ['/train.ss', '/dev.ss', '/test.ss']]
     tfrecords = ['data/' + flags.dataset + s for s in ['/train.tfrecord', '/dev.tfrecord', '/test.tfrecord']]
+    stats_filename = 'data/' + flags.dataset + '/stats.txt'
     embeddingpath = 'data/' + flags.dataset + '/embedding.txt'
-    hierarchy = flags.model in ['dnsc']
+    hierarchy = flags.model in ['dnsc', 'dhuapa']
     datasets, lengths, embedding, usr_cnt, prd_cnt, wrd_dict = \
-        data.build_dataset(datasets, tfrecords, embeddingpath, flags.max_doc_len,
+        data.build_dataset(datasets, tfrecords, stats_filename, embeddingpath, flags.max_doc_len,
                            flags.max_sen_len, hierarchy)
     trainset, devset, testset = datasets
     trainlen, devlen, testlen = lengths
-    trainset = trainset.shuffle(100000).batch(flags.batch_size)
+    trainset = trainset.shuffle(300000).batch(flags.batch_size)
     devset = devset.batch(flags.batch_size)
     testset = testset.batch(flags.batch_size)
     print("Loading data finished...")
@@ -122,10 +117,6 @@ with tf.Graph().as_default():
 
     with sess.as_default():
         # build the model
-        # model_params = flags.__flags
-        # model_params['embedding'] = embedding
-        # model_params['usr_cnt'] = usr_cnt
-        # model_params['prd_cnt'] = prd_cnt
         model_params = {
             'max_sen_len': flags.max_sen_len, 'max_doc_len': flags.max_doc_len,
             'cls_cnt': flags.cls_cnt, 'embedding': embedding,
@@ -136,24 +127,11 @@ with tf.Graph().as_default():
             'debug': flags.debug, 'convert_flag': flags.convert_flag,
             'lambda1': flags.lambda1, 'lambda2': flags.lambda2, 'lambda3': flags.lambda3
         }
-        if flags.model == 'dnsc':
-            model = DNSC(model_params)
-            cur_model = dnsc
-        elif flags.model == 'dnsc2':
-            model = DNSC2(model_params)
-            cur_model = dnsc2
-        if flags.model == 'dlstm':
-            model = DLSTM(model_params)
-            cur_model = dlstm
-        if flags.model == 'mlstm':
-            model = MLSTM(model_params)
-            cur_model = mlstm
-        if flags.model == 'mdhuapa':
-            model = MDHUAPA(model_params)
-            cur_model = mdhuapa
-        if flags.model == 'mldhuapa':
-            model = MLDHUAPA(model_params)
-            cur_model = mldhuapa
+        models = {'dnsc': (DNSC, dnsc),
+                  'mdhuapa': (MDHUAPA, mdhuapa),
+                  'dhuapa': (DHUAPA, dhuapa)}
+        model = models[flags.model][0](model_params)
+        cur_model = models[flags.model][1]
 
         data_iter = tf.data.Iterator.from_structure(trainset.output_types,
                                                     output_shapes=trainset.output_shapes)

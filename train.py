@@ -36,17 +36,18 @@ params = {
                      ('check', False, 'Whether to make a checkpoint')],
     'data_params': [('cls_cnt', 10, "Numbers of class"),
                     ('dataset', 'test', "The dataset")],
-    'model_chooing': [('model', 'dnsc', 'Model to train')],
+    'model_chooing': [('model', 'dhuapa', 'Model to train')],
     'model_hyperparam': [("emb_dim", 200, "Dimensionality of character embedding"),
                          ("hidden_size", 200, "hidden_size"),
                          ('max_sen_len', 50, 'max number of tokens per sentence'),
                          ('max_doc_len', 40, 'max number of tokens per sentence'),
                          ("lr", .001, "Learning rate"),
-                         ("l2_rate", 0, "rate of l2 regularization"),
+                         ("l2_rate", 0., "rate of l2 regularization"),
                          ("lambda1", .4, "proportion of the total loss"),
                          ("lambda2", .3, "proportion of the loss of user block"),
                          ("lambda3", .3, "proportion of the loss of product block"),
                          ("bilstm", True, "use biLSTM or LSTM"),
+                         ("split_by_sentence", False, "whether to split the document by sentences or fixed length"),
                          ("sen_hop_cnt", 3, "number of hops in sentence layer"),
                          ("doc_hop_cnt", 1, "number of hops in document layer"),
                          ("convert_flag", 'o', "params used in background converting process")],
@@ -95,11 +96,12 @@ with tf.Graph().as_default():
     datasets = ['data/' + flags.dataset + s for s in ['/train.ss', '/dev.ss', '/test.ss']]
     tfrecords = ['data/' + flags.dataset + s for s in ['/train.tfrecord', '/dev.tfrecord', '/test.tfrecord']]
     stats_filename = 'data/' + flags.dataset + '/stats.txt'
-    embeddingpath = 'data/' + flags.dataset + '/embedding.txt'
-    hierarchy = flags.model in ['dnsc', 'dhuapa']
+    embeddingpath = 'data/' + flags.dataset + '/embedding' + str(flags.emb_dim) + '.txt'
+    text_filename = 'data/' + flags.dataset + '/text'
+    hierarchy = flags.split_by_sentence
     datasets, lengths, embedding, usr_cnt, prd_cnt, wrd_dict = \
         data.build_dataset(datasets, tfrecords, stats_filename, embeddingpath, flags.max_doc_len,
-                           flags.max_sen_len, hierarchy)
+                           flags.max_sen_len, hierarchy, flags.emb_dim, text_filename)
     trainset, devset, testset = datasets
     trainlen, devlen, testlen = lengths
     trainset = trainset.shuffle(300000).batch(flags.batch_size)

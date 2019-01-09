@@ -11,7 +11,7 @@ def var(name, shape, initializer):
     return tf.get_variable(name, shape=shape, initializer=initializer)
 
 
-class DHUAPA(object):
+class MHHUAPA(object):
 
     def __init__(self, args):
         self.max_doc_len = args['max_doc_len']
@@ -30,6 +30,7 @@ class DHUAPA(object):
         self.lambda1 = args['lambda1']
         self.lambda2 = args['lambda2']
         self.lambda3 = args['lambda3']
+        self.head_cnt = 3
 
         self.best_dev_acc = .0
         self.best_test_acc = .0
@@ -114,12 +115,11 @@ class DHUAPA(object):
             lstm_outputs = lstm_bkg
 
             doc_bkg = [i for i in identities]
-            for ihop in range(self.doc_hop_cnt):
-                last = ihop == self.doc_hop_cnt - 1
-                doc_bkg = hop('hop' + str(ihop), last, lstm_outputs, lstm_bkg,
-                              doc_bkg[0], doc_bkg[1:], doc_len, max_doc_len,
-                              convert_flag)
-        outputs = doc_bkg
+
+            outputs = [hop('hop' + str(i), last, lstm_outputs, lstm_bkg,
+                           doc_bkg[0], doc_bkg[1:], doc_len, max_doc_len,
+                           convert_flag) for i in range(self.head_cnt)]
+        outputs = tf.concat(outputs, axis=1)
 
         return outputs
 

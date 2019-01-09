@@ -7,13 +7,7 @@ import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 import data
-from dnsc import DNSC
-from dhuapa import DHUAPA
-from mdhuapa import MDHUAPA
 from colored import fg, stylize
-import dnsc
-import mdhuapa
-import dhuapa
 import math
 
 
@@ -47,8 +41,8 @@ params = {
                          ("lambda2", .3, "proportion of the loss of user block"),
                          ("lambda3", .3, "proportion of the loss of product block"),
                          ("bilstm", True, "use biLSTM or LSTM"),
-                         ("split_by_sentence", False, "whether to split the document by sentences or fixed length"),
-                         ("sen_hop_cnt", 3, "number of hops in sentence layer"),
+                         ("split", False, "whether to split the document by sentences or fixed length"),
+                         ("sen_hop_cnt", 1, "number of hops in sentence layer"),
                          ("doc_hop_cnt", 1, "number of hops in document layer"),
                          ("convert_flag", 'o', "params used in background converting process")],
     'training_params': [("batch_size", 100, "Batch Size"),
@@ -59,7 +53,7 @@ params = {
                     ("log_device_placement", False, "Log placement of ops on devices")]
 }
 
-for param_collection in params.values():
+for param_collection in list(params.values()):
     for param_name, default, description in param_collection:
         param_type = type(default)
         if param_type is int:
@@ -84,8 +78,8 @@ _ = flags.batch_size
 output_file = open('code_history/' + str(cur_time) + '/output.txt', 'a')
 print("\nParameters:")
 for attr, value in sorted(flags.__flags.items()):
-    print("{}={}".format(attr.upper(), value.value))
-    print >> output_file, "{}={}".format(attr.upper(), value.value)
+    print(("{}={}".format(attr.upper(), value.value)))
+    print("{}={}".format(attr.upper(), value.value), file=output_file)
 print("")
 output_file.close()
 
@@ -98,7 +92,7 @@ with tf.Graph().as_default():
     stats_filename = 'data/' + flags.dataset + '/stats.txt'
     embeddingpath = 'data/' + flags.dataset + '/embedding' + str(flags.emb_dim) + '.txt'
     text_filename = 'data/' + flags.dataset + '/text'
-    hierarchy = flags.split_by_sentence
+    hierarchy = flags.split
     datasets, lengths, embedding, usr_cnt, prd_cnt, wrd_dict = \
         data.build_dataset(datasets, tfrecords, stats_filename, embeddingpath, flags.max_doc_len,
                            flags.max_sen_len, hierarchy, flags.emb_dim, text_filename)
@@ -129,11 +123,12 @@ with tf.Graph().as_default():
             'debug': flags.debug, 'convert_flag': flags.convert_flag,
             'lambda1': flags.lambda1, 'lambda2': flags.lambda2, 'lambda3': flags.lambda3
         }
-        models = {'dnsc': (DNSC, dnsc),
-                  'mdhuapa': (MDHUAPA, mdhuapa),
-                  'dhuapa': (DHUAPA, dhuapa)}
-        model = models[flags.model][0](model_params)
-        cur_model = models[flags.model][1]
+        exec('from ' + flags.model + ' import ' + flags.model.upper() + ' as model')
+        # models = {'dnsc': (DNSC, dnsc),
+        #           'mdhuapa': (MDHUAPA, mdhuapa),
+        #           'dhuapa': (DHUAPA, dhuapa)}
+        model = model(model_params)
+        # cur_model = models[flags.model][1]
 
         data_iter = tf.data.Iterator.from_structure(trainset.output_types,
                                                     output_shapes=trainset.output_shapes)
@@ -168,7 +163,7 @@ with tf.Graph().as_default():
         # run a dataset
         def run_set(sess, testlen, metrics, ops=tuple()):
             global flags
-            pgb = tqdm(range(int(math.ceil(float(testlen) / flags.batch_size))),
+            pgb = tqdm(list(range(int(math.ceil(float(testlen) / flags.batch_size)))),
                        leave=False, ncols=50)
             metrics_total = [0] * len(metrics)
             op_results = [[] for i in ops]
@@ -197,8 +192,8 @@ with tf.Graph().as_default():
                         run_set(sess, trainlen, metrics, (global_step, train_op, ))
                 info = model.output_metrics(train_metrics, trainlen)
                 info = 'Trainset:' + info
-                print(stylize(info, fg('yellow')))
-                print >> output_file, info
+                print((stylize(info, fg('yellow'))))
+                print(info, file=output_file)
 
                 if flags.debug:
                     for i, s in zip(step, train_summary):
@@ -210,27 +205,27 @@ with tf.Graph().as_default():
                 dev_metrics, = run_set(sess, devlen, metrics)
                 info = model.output_metrics(dev_metrics, devlen)
                 info = 'Devset:  ' + info
-                print(stylize(info, fg('green')))
-                print >> output_file, info
+                print((stylize(info, fg('green'))))
+                print(info, file=output_file)
 
                 # test on testset
                 sess.run(testinit)
                 test_metrics, = run_set(sess, testlen, metrics)
                 info = model.output_metrics(test_metrics, testlen)
                 info = 'Testset: ' + info
-                print(stylize(info, fg('red')))
-                print >> output_file, info
+                print((stylize(info, fg('red'))))
+                print(info, file=output_file)
 
                 # print info of this epoch
                 info = model.record_metrics(dev_metrics, test_metrics, devlen, testlen)
                 info = 'Epoch %d finished, ' % epoch + info
-                print(stylize(info, fg('white')))
-                print >> output_file, info
+                print((stylize(info, fg('white'))))
+                print(info, file=output_file)
 
                 # write a checkpoint
                 if flags.check and 'NEW' in info:
                     save_path = saver.save(sess, 'check_points/', global_step=step[-1])
-                    print('Checkpoint saved to ' + save_path)
+                    print(('Checkpoint saved to ' + save_path))
 
                 output_file.close()
 
